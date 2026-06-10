@@ -219,12 +219,14 @@ async def upload_to_platform(resource_ids: list[str]):
             }
 
             try:
+                from storage.db import get_setting as _get_setting
+                _token = _get_setting("agent_token", "") or settings.AGENT_TOKEN
+                _headers = {"Content-Type": "application/json"}
+                if _token:
+                    _headers["Authorization"] = f"Bearer {_token}"
                 resp = await client.post(
                     f"{settings.PLATFORM_API_BASE}/api/terminal/inventory/upload",
-                    json=payload,
-                    headers={"Authorization": f"Bearer {settings.AGENT_TOKEN}"}
-                    if settings.AGENT_TOKEN
-                    else {},
+                    json=payload, headers=_headers,
                 )
 
                 if resp.status_code in (200, 201):

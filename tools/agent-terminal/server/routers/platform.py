@@ -85,8 +85,10 @@ class UploadResourceResponse(BaseModel):
 # --- Helpers ---
 
 def _get_headers() -> dict:
-    """Get headers with auth token for platform API calls."""
-    token = settings.AGENT_TOKEN or get_setting("agent_token", "")
+    """Get headers with auth token for platform API calls.
+    Priority: 运行时登录获取的 token > 配置文件中的默认值（通常为空）。
+    """
+    token = get_setting("agent_token", "") or settings.AGENT_TOKEN
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -101,7 +103,7 @@ PLATFORM_BASE = "http://localhost:8000"
 @router.get("/status", response_model=PlatformStatusResponse)
 async def get_platform_status():
     """Check connection status with the Super Market platform."""
-    token = settings.AGENT_TOKEN or get_setting("agent_token", "")
+    token = get_setting("agent_token", "") or settings.AGENT_TOKEN
     if not token:
         return PlatformStatusResponse(
             connected=False,

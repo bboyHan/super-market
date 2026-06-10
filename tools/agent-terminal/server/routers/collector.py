@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from config import settings
+from storage.db import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ async def get_status():
         "pcgame": _state["pcgame"],
         "mobile": _state["mobile"],
         "backend": True,
-        "platform": bool(settings.AGENT_TOKEN or settings.PLATFORM_API_BASE),
+        "platform": bool(get_setting("agent_token", "") or settings.AGENT_TOKEN or settings.PLATFORM_API_BASE),
         "totalCount": _state["total_count"],
     }
 

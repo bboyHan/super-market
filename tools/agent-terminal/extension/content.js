@@ -15,7 +15,8 @@
 (function() {
   'use strict';
 
-  const BACKEND_URL = 'http://localhost:8801';
+  const BACKEND_URL = 'http://localhost:8800';
+  const CAPTURE_API = '/api/capture/ingest';
 
   // ── 状态 ──
   let captureCount = 0;
@@ -28,9 +29,9 @@
   // ── 发送到本地后端 ──
   async function sendToBackend(credential) {
     if (!credential) return;
-    
+
     try {
-      const resp = await fetch(`${BACKEND_URL}/api/collect`, {
+      const resp = await fetch(`${BACKEND_URL}${CAPTURE_API}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credential),
@@ -114,13 +115,87 @@
 
   // ── 策略 2: 网络请求拦截 ──
   // 拦截 fetch/XHR 请求中可能的支付凭证
+
+  // 存储请求体用于请求-响应配对（web_save 需要请求体中的 openid）
+  const _requestBodies = new Map();
+
+  // ── web_save 专用拦截：捕获请求体 + 响应体 → 带账号信息的支付凭证 ──
+  function isWebSave(url) {
+    return url.includes('/v1/r/') && url.includes('web_save');
+  }
+
+  function parseFormBody(body) {
+    if (!body || typeof body !== 'string') return {};
+    const params = {};
+    body.split('&').forEach(pair => {
+      const [k, v] = pair.split('=').map(decodeURIComponent);
+      if (k) params[k] = v;
+    });
+    return params;
+  }
+
+  function captureWebSave(requestBody, responseBody, url) {
+    const req = parseFormBody(requestBody);
+    const openid = req.openid || '';
+    const payMethod = req.pay_method || '';
+    const offerId = (url.match(/\/v1\/r\/(\d+)\/web_save/) || [])[1] || '';
+
+    // 提取 weixin:// 支付 URL
+    const payUrlMatch = responseBody.match(/weixin:\/\/wxpay\/bizpayurl\?pr=[^\s"'}]+/);
+    if (!payUrlMatch) return; // 没有微信支付 URL 则不采集
+
+    const credential = {
+      type: 'payment_url',
+      value: payUrlMatch[0],
+      platform: 'qq_midas',
+      product: 'Q币',
+      product_id: offerId,
+      source: 'web_save',
+      api_url: url,
+      // ⭐ 关键：携带请求体中的 openid 用于账号匹配
+      openid: openid,
+      pay_method: payMethod,
+      body: requestBody,
+      captured_at: new Date().toISOString(),
+    };
+
+    console.log(`[AT] ✅ 捕获 web_save: openid=${openid.substr(0,8)}... pay_method=${payMethod}`);
+    sendToBackend(credential);
+  }
+
   function interceptNetwork() {
-    // fetch 拦截
+    // ── fetch 拦截 ──
     const originalFetch = window.fetch;
     window.fetch = async function(...args) {
       const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-      
-      // 检查是否匹配任意平台的 API pattern
+      const requestInit = args[1] || {};
+      const method = (requestInit.method || 'GET').toUpperCase();
+      let requestBody = requestInit.body || '';
+
+      // ── web_save 专用拦截 ──
+      if (isWebSave(url) && method === 'POST') {
+        // 1) 取出请求体（form data 可能被消费，需提前读取）
+        if (!requestBody && args[0] instanceof Request) {
+          requestBody = await args[0].clone().text();
+        }
+
+        // 2) 发起真实请求
+        const response = await originalFetch.apply(this, args);
+
+        // 3) 读取响应体并匹配
+        if (response.ok) {
+          try {
+            const clone = response.clone();
+            const text = await clone.text();
+            captureWebSave(requestBody, text, url);
+          } catch (e) {
+            console.warn('[AT] web_save response read error:', e);
+          }
+        }
+        return response;
+      }
+
+      // ── 通用平台 API pattern 匹配 ──
       let matchedPlatform = null;
       for (const platform of platforms) {
         for (const pattern of (platform.apiPatterns || [])) {
@@ -136,71 +211,89 @@
         return originalFetch.apply(this, args);
       }
 
-      // 拦截：读取响应内容
       const response = await originalFetch.apply(this, args);
-      
-      // 只拦截成功的响应
       if (!response.ok) return response;
 
       try {
         const clone = response.clone();
         const text = await clone.text();
-        
-        // 检测响应中是否包含支付 URL 或 二维码
         checkResponseForCredentials(text, url, matchedPlatform.name);
-      } catch (e) {
-        // 静默失败
-      }
+      } catch (e) {}
 
       return response;
     };
 
-    // XHR 拦截
+    // ── XHR 拦截 ──
     const originalOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(method, url) {
       this._at_url = typeof url === 'string' ? url : url?.toString() || '';
+      this._at_method = method;
       return originalOpen.apply(this, arguments);
     };
 
     const originalSend = XMLHttpRequest.prototype.send;
     XMLHttpRequest.prototype.send = function(body) {
       const url = this._at_url || '';
+      const method = (this._at_method || 'GET').toUpperCase();
       const xhr = this;
 
-      // 匹配 platform API pattern
-      let matchedPlatform = null;
-      for (const platform of platforms) {
-        for (const pattern of (platform.apiPatterns || [])) {
-          if (pattern.test(url)) {
-            matchedPlatform = platform;
-            break;
-          }
-        }
-        if (matchedPlatform) break;
-      }
-
-      if (matchedPlatform) {
-        const originalReadyState = Object.getOwnPropertyDescriptor(
-          XMLHttpRequest.prototype, 'readyState'
-        );
-        
+      // web_save 专用拦截（XHR 方式）
+      if (isWebSave(url) && method === 'POST') {
+        const reqBody = typeof body === 'string' ? body : '';
         xhr.addEventListener('load', function() {
           try {
-            const text = xhr.responseText;
-            checkResponseForCredentials(text, url, matchedPlatform.name);
+            if (xhr.status >= 200 && xhr.status < 300) {
+              captureWebSave(reqBody, xhr.responseText, url);
+            }
           } catch (e) {}
         });
+      } else {
+        // 通用平台 pattern
+        let matchedPlatform = null;
+        for (const platform of platforms) {
+          for (const pattern of (platform.apiPatterns || [])) {
+            if (pattern.test(url)) {
+              matchedPlatform = platform;
+              break;
+            }
+          }
+          if (matchedPlatform) break;
+        }
+
+        if (matchedPlatform) {
+          xhr.addEventListener('load', function() {
+            try {
+              checkResponseForCredentials(xhr.responseText, url, matchedPlatform.name);
+            } catch (e) {}
+          });
+        }
       }
 
       return originalSend.apply(this, arguments);
     };
   }
 
-  // ── 检查响应中是否包含凭证 ──
+  // ── 检查响应中是否包含支付凭证（通用）──
   function checkResponseForCredentials(text, url, platformName) {
     if (!text || text.length > 100000) return;
 
-    // 检查是否包含支付 URL
+    // 检查 weixin:// 支付 URL
+    const wxPayMatch = text.match(/weixin:\/\/wxpay\/bizpayurl\?pr=[^\s"'}]+/);
+    if (wxPayMatch) {
+      sendToBackend({
+        type: 'payment_url',
+        value: wxPayMatch[0],
+        platform: platformName,
+        product: 'Q币',
+        source: 'api_response',
+        api_url: url,
+        without_openid: true,
+        captured_at: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // 检查 https://wx.tenpay.com/ 支付 URL
     const payUrlMatch = text.match(/https?:\/\/wx\.tenpay\.com\/[^\s"']+/);
     if (payUrlMatch) {
       sendToBackend({
@@ -215,7 +308,7 @@
       return;
     }
 
-    // 检查是否包含微信支付参数
+    // 检查微信支付参数
     if (text.includes('getBrandWCPayRequest') || text.includes('wx_appid')) {
       sendToBackend({
         type: 'payment_params_raw',

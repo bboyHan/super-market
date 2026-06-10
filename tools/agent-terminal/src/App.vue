@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useThemeStore } from '@/stores/theme'
 import { useTasksStore } from '@/stores/tasks'
+import UserBadge from '@/components/UserBadge.vue'
 
 const theme = useThemeStore()
 const tasks = useTasksStore()
@@ -34,6 +35,11 @@ onUnmounted(() => {
   <div v-else class="page-frame" :class="{ light: !theme.isDark }">
     <router-view />
   </div>
+
+  <!-- 全局用户信息（非登录页右上角显示） -->
+  <div v-if="!isLoginPage" class="global-user-badge">
+    <UserBadge />
+  </div>
 </template>
 
 <style>
@@ -46,6 +52,14 @@ html, body, #app { height: 100%; width: 100%; }
   color: #e0e0e0;
 }
 .light { background: #f5f5f5; color: #333; }
+
+/* 全局用户信息定位 */
+.global-user-badge {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 9999;
+}
 
 /* Shared transitions */
 .fade-enter-active, .fade-leave-active {

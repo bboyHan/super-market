@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "dgSpecHash": "P8UCCcHyGjo=",
+  "success": true,
+  "projectFilePath": "D:\\sjmm\\code\\super-market\\server\\oracle\\src\\Oracle.Extractor\\Oracle.Extractor.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\1\\.nuget\\packages\\system.io.pipelines\\10.0.9\\system.io.pipelines.10.0.9.nupkg.sha512",
+    "C:\\Users\\1\\.nuget\\packages\\system.net.http.json\\10.0.9\\system.net.http.json.10.0.9.nupkg.sha512",
+    "C:\\Users\\1\\.nuget\\packages\\system.text.encodings.web\\10.0.9\\system.text.encodings.web.10.0.9.nupkg.sha512",
+    "C:\\Users\\1\\.nuget\\packages\\system.text.json\\10.0.9\\system.text.json.10.0.9.nupkg.sha512",
+    "C:\\Users\\1\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.13\\microsoft.netcore.app.runtime.win-x64.8.0.13.nupkg.sha512",
+    "C:\\Users\\1\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.13\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.13.nupkg.sha512",
+    "C:\\Users\\1\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.13\\microsoft.aspnetcore.app.runtime.win-x64.8.0.13.nupkg.sha512"
+  ],
+  "logs": []
+}

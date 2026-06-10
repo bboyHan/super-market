@@ -268,7 +268,67 @@ async def create_order(
         await session.execute(
             text("UPDATE agents SET frozen=frozen+:amt WHERE id=:aid").bindparams(amt=total_amt, aid=ag[0]))
 
+    # ── 自动交付：消耗库存 → 写入交付记录 → 回调 ──
+    deliveries_made = 0
+    if ag and ag[0]:
+        # 选取该代理商名下 AVAILABLE 的库存
+        inv_rows = await session.execute(
+            text("""SELECT id, content FROM inventory_items
+                   WHERE agent_id=:aid AND product_id=:prid AND status='AVAILABLE'
+                   ORDER BY created_at ASC LIMIT :qty FOR UPDATE""")
+            .bindparams(aid=ag[0], prid=pr[0], qty=quantity))
+        items = inv_rows.all()
+
+        for inv_item in items:
+            inv_id, content = inv_item
+            # 标记库存为已消耗
+            await session.execute(
+                text("UPDATE inventory_items SET status='USED', order_no=:on WHERE id=:iid")
+                .bindparams(on=order_no, iid=inv_id))
+            # 写入交付记录
+            await session.execute(
+                text("INSERT INTO order_deliveries (order_no, type, content) VALUES (:on, :tp, :ct)")
+                .bindparams(on=order_no, tp=pr[3] if pr[3] else 'card_key', ct=content))
+            deliveries_made += 1
+
+        if deliveries_made > 0:
+            # 更新订单状态为 SUCCESS
+            await session.execute(
+                text("UPDATE orders SET status='SUCCESS', updated_at=NOW() WHERE order_no=:on")
+                .bindparams(on=order_no))
+            # 解冻对应积分
+            wal2 = await session.execute(
+                text("SELECT id, frozen FROM wallets WHERE owner_type='AGENT' AND owner_id=:aid FOR UPDATE")
+                .bindparams(aid=ag[0]))
+            w2 = wal2.first()
+            if w2 and w2[1] >= total_amt:
+                nf2 = w2[1] - total_amt
+                await session.execute(
+                    text("UPDATE wallets SET frozen=:f, version=version+1, updated_at=NOW() WHERE id=:wid")
+                    .bindparams(f=nf2, wid=w2[0]))
+                await session.execute(
+                    text("UPDATE agents SET frozen=frozen-:amt WHERE id=:aid")
+                    .bindparams(amt=total_amt, aid=ag[0]))
+                await session.execute(
+                    text("UPDATE point_freeze_records SET status='UNFROZEN' WHERE order_no=:on AND status='FROZEN'")
+                    .bindparams(on=order_no))
+
     await session.commit()
+
+    # ── 异步回调通知 API 支付商 ──
+    if deliveries_made > 0 and cb_url:
+        try:
+            await _fire_callback(order_no, cb_url, {
+                "order_no": order_no,
+                "client_order_id": client_order_id,
+                "product_id": product_id,
+                "quantity": quantity,
+                "total_price": total_amt,
+                "status": "SUCCESS",
+                "deliveries": deliveries_made,
+            })
+        except Exception:
+            pass  # 回调失败由后台定时重试
 
     return {
         "code": 0,
@@ -278,9 +338,10 @@ async def create_order(
             "product_id": product_id,
             "quantity": quantity,
             "total_price": total_amt,
-            "status": "PENDING",
+            "status": "SUCCESS" if deliveries_made > 0 else "PENDING",
+            "deliveries": deliveries_made,
         },
-        "msg": "创建成功",
+        "msg": "创建成功" + (f"，已交付 {deliveries_made} 条" if deliveries_made > 0 else "，等待交付"),
     }
 
 
@@ -353,3 +414,19 @@ async def query_order(
         },
         "msg": "查询成功",
     }
+
+
+# ── 异步回调 ──────────────────────────────────────
+
+
+async def _fire_callback(order_no: str, callback_url: str, payload: dict) -> bool:
+    """向 API 支付商发送订单回调通知（异步，fire-and-forget）。"""
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(callback_url, json=payload)
+            if resp.status_code == 200:
+                return True
+            return False
+    except Exception:
+        return False

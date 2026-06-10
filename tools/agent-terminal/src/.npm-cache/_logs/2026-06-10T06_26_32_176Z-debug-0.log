@@ -1,0 +1,63 @@
+0 verbose cli D:\pkg\nodejs\node.exe D:\pkg\nodejs\node_global\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.16.0
+2 info using node@v26.2.0
+3 silly config load:file:D:\pkg\nodejs\node_global\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\1\AppData\Local\Microsoft\TypeScript\6.0\.npmrc
+5 silly config load:file:C:\Users\1\.npmrc
+6 silly config load:file:D:\pkg\nodejs\node_global\etc\npmrc
+7 verbose title npm install types-registry@latest
+8 verbose argv "install" "--ignore-scripts" "types-registry@latest"
+9 verbose logfile logs-max:10 dir:D:\sjmm\code\super-market\tools\agent-terminal\src\.npm-cache\_logs\2026-06-10T06_26_32_176Z-
+10 verbose logfile D:\sjmm\code\super-market\tools\agent-terminal\src\.npm-cache\_logs\2026-06-10T06_26_32_176Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4395630592 maxSize:1098907648 maxEntrySize:549453824
+13 silly packumentCache corgi:https://registry.npmmirror.com/types-registry cache-miss
+14 http fetch GET 200 https://registry.npmmirror.com/types-registry 157ms (cache miss)
+15 silly packumentCache corgi:https://registry.npmmirror.com/types-registry set size:156164 disposed:false
+16 silly idealTree buildDeps
+17 silly fetch manifest types-registry@0.1.773
+18 silly packumentCache full:https://registry.npmmirror.com/types-registry cache-miss
+19 http fetch GET 200 https://registry.npmmirror.com/types-registry 98ms (cache miss)
+20 silly packumentCache full:https://registry.npmmirror.com/types-registry set size:245558 disposed:false
+21 silly placeDep ROOT types-registry@0.1.773 OK for:  want: 0.1.773
+22 silly reify moves {}
+23 silly audit bulk request { 'types-registry': [ '0.1.773' ] }
+24 http cache types-registry@https://registry.npmmirror.com/types-registry/-/types-registry-0.1.773.tgz 0ms (cache hit)
+25 silly tarball no local data for types-registry@https://registry.npmmirror.com/types-registry/-/types-registry-0.1.773.tgz. Extracting by manifest.
+26 http fetch POST 404 https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk 22ms
+27 verbose audit error HttpErrorGeneral: 404 Not Found - POST https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk - [NOT_IMPLEMENTED] /-/npm/v1/security/* not implemented yet
+27 verbose audit error     at D:\pkg\nodejs\node_global\node_modules\npm\node_modules\npm-registry-fetch\lib\check-response.js:103:15
+27 verbose audit error     at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+27 verbose audit error     at async #getReport (D:\pkg\nodejs\node_global\node_modules\npm\node_modules\@npmcli\arborist\lib\audit-report.js:275:19)
+27 verbose audit error     at async AuditReport.run (D:\pkg\nodejs\node_global\node_modules\npm\node_modules\@npmcli\arborist\lib\audit-report.js:100:19) {
+27 verbose audit error   headers: [Object: null prototype] {
+27 verbose audit error     server: [ 'Tengine' ],
+27 verbose audit error     date: [ 'Wed, 10 Jun 2026 06:26:39 GMT' ],
+27 verbose audit error     'content-type': [ 'application/json' ],
+27 verbose audit error     'transfer-encoding': [ 'chunked' ],
+27 verbose audit error     connection: [ 'keep-alive' ],
+27 verbose audit error     'strict-transport-security': [ 'max-age=5184000' ],
+27 verbose audit error     via: [ 'kunlun3.cn9174[,404666]' ],
+27 verbose audit error     'timing-allow-origin': [ '*' ],
+27 verbose audit error     eagleid: [ '8cf9916717810727995651571e' ],
+27 verbose audit error     'x-fetch-attempts': [ '1' ]
+27 verbose audit error   },
+27 verbose audit error   statusCode: 404,
+27 verbose audit error   code: 'E404',
+27 verbose audit error   method: 'POST',
+27 verbose audit error   uri: 'https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk',
+27 verbose audit error   body: {
+27 verbose audit error     error: '[NOT_IMPLEMENTED] /-/npm/v1/security/* not implemented yet'
+27 verbose audit error   },
+27 verbose audit error   pkgid: undefined
+27 verbose audit error }
+28 silly audit error [object Object]
+29 silly audit report null
+30 http fetch GET 200 https://cdn.npmmirror.com/packages/types-registry/0.1.773/types-registry-0.1.773.tgz 189ms (cache miss)
+31 silly ADD node_modules/types-registry
+32 verbose cwd C:\Users\1\AppData\Local\Microsoft\TypeScript\6.0
+33 verbose os Windows_NT 10.0.26200
+34 verbose node v26.2.0
+35 verbose npm  v11.16.0
+36 verbose exit 0
+37 info ok

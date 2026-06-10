@@ -1,0 +1,91 @@
+0 verbose cli D:\pkg\nodejs\node.exe D:\pkg\nodejs\node_global\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.16.0
+2 info using node@v26.2.0
+3 silly config load:file:D:\pkg\nodejs\node_global\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\1\AppData\Local\Microsoft\TypeScript\6.0\.npmrc
+5 silly config load:file:C:\Users\1\.npmrc
+6 silly config load:file:D:\pkg\nodejs\node_global\etc\npmrc
+7 verbose title npm install @types/ws@ts6.0 @types/node@ts6.0
+8 verbose argv "install" "--ignore-scripts" "@types/ws@ts6.0" "@types/node@ts6.0" "--save-dev" "--user-agent" "typesInstaller/6.0.3"
+9 verbose logfile logs-max:10 dir:D:\sjmm\code\super-market\tools\agent-terminal\src\.npm-cache\_logs\2026-06-10T09_04_31_184Z-
+10 verbose logfile D:\sjmm\code\super-market\tools\agent-terminal\src\.npm-cache\_logs\2026-06-10T09_04_31_184Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4395630592 maxSize:1098907648 maxEntrySize:549453824
+13 silly packumentCache corgi:https://registry.npmmirror.com/@types%2fws cache-miss
+14 silly packumentCache corgi:https://registry.npmmirror.com/@types%2fnode cache-miss
+15 http fetch GET 200 https://registry.npmmirror.com/@types%2fws 105ms (cache miss)
+16 silly packumentCache corgi:https://registry.npmmirror.com/@types%2fws set size:17077 disposed:false
+17 http fetch GET 200 https://registry.npmmirror.com/@types%2fnode 266ms (cache miss)
+18 silly packumentCache corgi:https://registry.npmmirror.com/@types%2fnode set size:560676 disposed:false
+19 silly idealTree buildDeps
+20 silly fetch manifest @types/ws@8.18.1
+21 silly packumentCache full:https://registry.npmmirror.com/@types%2fws cache-miss
+22 http fetch GET 200 https://registry.npmmirror.com/@types%2fws 31ms (cache miss)
+23 silly packumentCache full:https://registry.npmmirror.com/@types%2fws set size:30168 disposed:false
+24 silly fetch manifest @types/node@25.9.2
+25 silly packumentCache full:https://registry.npmmirror.com/@types%2fnode cache-miss
+26 http fetch GET 200 https://registry.npmmirror.com/@types%2fnode 31ms (cache revalidated)
+27 silly packumentCache full:https://registry.npmmirror.com/@types%2fnode set size:10276455 disposed:false
+28 silly placeDep ROOT @types/node@25.9.2 OK for:  want: 25.9.2
+29 silly placeDep ROOT @types/ws@8.18.1 OK for:  want: 8.18.1
+30 silly fetch manifest undici-types@>=7.24.0 <7.24.7
+31 silly packumentCache full:https://registry.npmmirror.com/undici-types cache-miss
+32 http fetch GET 200 https://registry.npmmirror.com/undici-types 30ms (cache miss)
+33 silly packumentCache full:https://registry.npmmirror.com/undici-types set size:43333 disposed:false
+34 silly placeDep ROOT undici-types@7.24.6 OK for: @types/node@25.9.2 want: >=7.24.0 <7.24.7
+35 silly reify moves {}
+36 silly audit bulk request {
+36 silly audit   '@types/react': [ '19.2.17' ],
+36 silly audit   csstype: [ '3.2.3' ],
+36 silly audit   'types-registry': [ '0.1.773' ],
+36 silly audit   '@types/node': [ '25.9.2' ],
+36 silly audit   '@types/ws': [ '8.18.1' ],
+36 silly audit   'undici-types': [ '7.24.6' ]
+36 silly audit }
+37 http cache undici-types@https://registry.npmmirror.com/undici-types/-/undici-types-7.24.6.tgz 0ms (cache hit)
+38 http cache @types/node@https://registry.npmmirror.com/@types/node/-/node-25.9.2.tgz 0ms (cache hit)
+39 http cache @types/ws@https://registry.npmmirror.com/@types/ws/-/ws-8.18.1.tgz 0ms (cache hit)
+40 silly tarball no local data for undici-types@https://registry.npmmirror.com/undici-types/-/undici-types-7.24.6.tgz. Extracting by manifest.
+41 silly tarball no local data for @types/node@https://registry.npmmirror.com/@types/node/-/node-25.9.2.tgz. Extracting by manifest.
+42 silly tarball no local data for @types/ws@https://registry.npmmirror.com/@types/ws/-/ws-8.18.1.tgz. Extracting by manifest.
+43 http fetch POST 404 https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk 20ms
+44 verbose audit error HttpErrorGeneral: 404 Not Found - POST https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk - [NOT_IMPLEMENTED] /-/npm/v1/security/* not implemented yet
+44 verbose audit error     at D:\pkg\nodejs\node_global\node_modules\npm\node_modules\npm-registry-fetch\lib\check-response.js:103:15
+44 verbose audit error     at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+44 verbose audit error     at async #getReport (D:\pkg\nodejs\node_global\node_modules\npm\node_modules\@npmcli\arborist\lib\audit-report.js:275:19)
+44 verbose audit error     at async AuditReport.run (D:\pkg\nodejs\node_global\node_modules\npm\node_modules\@npmcli\arborist\lib\audit-report.js:100:19) {
+44 verbose audit error   headers: [Object: null prototype] {
+44 verbose audit error     server: [ 'Tengine' ],
+44 verbose audit error     date: [ 'Wed, 10 Jun 2026 09:04:33 GMT' ],
+44 verbose audit error     'content-type': [ 'application/json' ],
+44 verbose audit error     'transfer-encoding': [ 'chunked' ],
+44 verbose audit error     connection: [ 'keep-alive' ],
+44 verbose audit error     'strict-transport-security': [ 'max-age=5184000' ],
+44 verbose audit error     via: [ 'kunlun5.cn9174[,404666]' ],
+44 verbose audit error     'timing-allow-origin': [ '*' ],
+44 verbose audit error     eagleid: [ '8cf9916917810822732803840e' ],
+44 verbose audit error     'x-fetch-attempts': [ '1' ]
+44 verbose audit error   },
+44 verbose audit error   statusCode: 404,
+44 verbose audit error   code: 'E404',
+44 verbose audit error   method: 'POST',
+44 verbose audit error   uri: 'https://registry.npmmirror.com/-/npm/v1/security/advisories/bulk',
+44 verbose audit error   body: {
+44 verbose audit error     error: '[NOT_IMPLEMENTED] /-/npm/v1/security/* not implemented yet'
+44 verbose audit error   },
+44 verbose audit error   pkgid: undefined
+44 verbose audit error }
+45 silly audit error [object Object]
+46 silly audit report null
+47 http fetch GET 200 https://cdn.npmmirror.com/packages/%40types/ws/8.18.1/ws-8.18.1.tgz 206ms (cache miss)
+48 http fetch GET 200 https://cdn.npmmirror.com/packages/undici-types/7.24.6/undici-types-7.24.6.tgz 245ms (cache miss)
+49 http fetch GET 200 https://cdn.npmmirror.com/packages/%40types/node/25.9.2/node-25.9.2.tgz 475ms (cache miss)
+50 silly ADD node_modules/undici-types
+51 silly ADD node_modules/@types/ws
+52 silly ADD node_modules/@types/node
+53 verbose cwd C:\Users\1\AppData\Local\Microsoft\TypeScript\6.0
+54 verbose os Windows_NT 10.0.26200
+55 verbose node v26.2.0
+56 verbose npm  v11.16.0
+57 verbose exit 0
+58 info ok

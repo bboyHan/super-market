@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Oracle.Api</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Oracle.Shared\Oracle.Shared.csproj" />
+    <ProjectReference Include="..\Oracle.Capture\Oracle.Capture.csproj" />
+    <ProjectReference Include="..\Oracle.Tls\Oracle.Tls.csproj" />
+    <ProjectReference Include="..\Oracle.Http\Oracle.Http.csproj" />
+    <ProjectReference Include="..\Oracle.Extractor\Oracle.Extractor.csproj" />
+  </ItemGroup>
+</Project>

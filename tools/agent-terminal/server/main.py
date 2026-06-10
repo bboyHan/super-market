@@ -21,6 +21,7 @@ from config import settings
 from storage.db import init_db, get_recent_logs, add_log
 from services import task_manager
 from routers import tasks, inventory, accounts, platform, system, collector
+from routers.capture_router import router as capture_router
 
 # --- Logging setup ---
 logging.basicConfig(
@@ -43,6 +44,42 @@ async def lifespan(app: FastAPI):
 
     logger.info(f"{settings.APP_NAME} v{settings.APP_VERSION} starting up...")
     init_db()
+
+    # ── 初始化支付采集器引擎 ──
+    from capture import engine as capture_engine
+    from platforms import register as reg_adapter
+    from platforms.qq_midas import QQMidassAdapter
+    from processors import (
+        ProcessorChain, DedupProcessor, ClassifierProcessor,
+        StorageProcessor, UploadProcessor,
+    )
+    from storage.db import get_setting
+
+    # 注册平台适配器
+    reg_adapter(QQMidassAdapter())
+
+    # 设置处理器链
+    chain = ProcessorChain()
+    chain.add(DedupProcessor())
+    chain.add(ClassifierProcessor(capture_engine._platform_adapters))
+    chain.add(StorageProcessor())
+    upload_proc = UploadProcessor(
+        platform_base=settings.PLATFORM_API_BASE,
+        token_getter=lambda: get_setting("agent_token", "") or settings.AGENT_TOKEN,
+    )
+    chain.add(upload_proc)
+    capture_engine.set_callback(chain.process)
+
+    # 注册适配器到引擎（用于实时识别）
+    for adapter in [QQMidassAdapter()]:
+        capture_engine.register_adapter(adapter)
+
+    # 启动后台上传 Worker
+    import asyncio
+    asyncio.create_task(upload_proc.start())
+
+    logger.info("Payment collector engine initialized")
+
     add_log("info", "system", f"{settings.APP_NAME} v{settings.APP_VERSION} started on {settings.HOST}:{settings.PORT}")
 
     # Start background health check loop
@@ -102,6 +139,7 @@ app.include_router(accounts.router)
 app.include_router(platform.router)
 app.include_router(system.router)
 app.include_router(collector.router)
+app.include_router(capture_router)
 
 
 # --- SSE log streaming ---

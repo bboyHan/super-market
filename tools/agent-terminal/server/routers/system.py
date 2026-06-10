@@ -74,7 +74,7 @@ async def get_system_status():
     try:
         import httpx
         resp = httpx.get(
-            f"{settings.PLATFORM_API_BASE}/api/v1/health",
+            f"{settings.PLATFORM_API_BASE}/health",
             timeout=3,
         )
         platform_connected = resp.status_code == 200

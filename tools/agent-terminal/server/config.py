@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # Platform API
     PLATFORM_API_BASE: str = "http://localhost:8000"
-    AGENT_TOKEN: str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMyIsInVzZXJuYW1lIjoidGVzdCIsInJvbGUiOiJBR0VOVCIsInJlZl9pZCI6OSwiaWF0IjoxNzgwOTI3NDQ4LCJleHAiOjE3ODEwMTM4NDh9.IFlsseQY2uxmx4F5iv7BtENYWFo2hTFycVX6At6Gok8"
+    AGENT_TOKEN: str = ""  # 由首次登录时的授权码验证设置，不应硬编码
 
     # Logging
     LOG_DIR: str = str(BASE_DIR / "logs")
