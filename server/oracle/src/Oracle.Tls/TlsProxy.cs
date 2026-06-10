@@ -27,6 +27,8 @@ public class TlsProxy : IAsyncDisposable
     private readonly CredentialQueue _credentialQueue;
     private readonly Oracle.Extractor.RuleEngine? _ruleEngine;
     private readonly TcpListener _listener;
+    private TcpListener? _dnsListener;
+    private Task? _dnsListenTask;
     private CancellationTokenSource? _cts;
     private Task? _listenTask;
     private long _totalConnections;
@@ -54,23 +56,40 @@ public class TlsProxy : IAsyncDisposable
         if (IsRunning) return;
 
         _cts = new CancellationTokenSource();
+
+        // Port 18802: Browser CONNECT proxy
         _listener.Start();
-        _listenTask = Task.Run(() => AcceptLoop(_cts.Token));
+        _listenTask = Task.Run(() => AcceptLoop("Proxy", _listener, _cts.Token));
+
+        // Port 443: DNS-spoofed app traffic (微信小程序/端游)
+        try
+        {
+            _dnsListener = new TcpListener(IPAddress.Loopback, 443);
+            _dnsListener.Start();
+            _dnsListenTask = Task.Run(() => AcceptLoop("DNS", _dnsListener, _cts.Token));
+            Console.Error.WriteLine("[TlsProxy] Port 443 listener started (DNS redirect)");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[TlsProxy] Port 443 unavailable: {ex.Message}");
+            Console.Error.WriteLine("[TlsProxy] Run as Administrator to listen on port 443");
+        }
     }
 
     public void Stop()
     {
         _cts?.Cancel();
         try { _listener.Stop(); } catch { }
+        try { _dnsListener?.Stop(); } catch { }
     }
 
-    private async Task AcceptLoop(CancellationToken ct)
+    private async Task AcceptLoop(string name, TcpListener listener, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
             try
             {
-                var clientSocket = await _listener.AcceptSocketAsync(ct);
+                var clientSocket = await listener.AcceptSocketAsync(ct);
                 Interlocked.Increment(ref _activeConnections);
                 Interlocked.Increment(ref _totalConnections);
 
