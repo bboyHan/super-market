@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Terminal — 凭证采集工作站</title>
+<style>
+/* ── Reset & Variables ── */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --radius:10px;--radius-sm:6px;--radius-xs:4px;
+  --font:'Inter','SF Pro Display',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono','SF Mono','Fira Code','Consolas',monospace;
+  --transition:all .2s cubic-bezier(.4,0,.2,1);
+}
+.light{--bg:#f8f9fc;--bg2:#ffffff;--bg3:#f0f2f6;--bg4:#e4e7ed;--text:#1a1d26;--text2:#5a6072;--text3:#8e94a6;--border:rgba(0,0,0,0.06);--shadow:0 1px 3px rgba(0,0,0,0.04),0 1px 2px rgba(0,0,0,0.06);--shadow-lg:0 10px 25px rgba(0,0,0,0.08);--accent:#4f46e5;--accent-hover:#4338ca;--accent-bg:rgba(79,70,229,0.08);--green:#059669;--green-bg:rgba(5,150,105,0.08);--yellow:#d97706;--yellow-bg:rgba(217,119,6,0.08);--red:#dc2626;--red-bg:rgba(220,38,38,0.08);--blue:#2563eb;--blue-bg:rgba(37,99,235,0.08);--sidebar-bg:#ffffff;--sidebar-border:rgba(0,0,0,0.04);--card-bg:#ffffff;--input-bg:#f3f4f6;--hover-bg:rgba(0,0,0,0.02)}
+.dark{--bg:#0a0a0f;--bg2:#111118;--bg3:#1a1a24;--bg4:#24243a;--text:#e4e4ed;--text2:#8e8ea0;--text3:#5c5c70;--border:rgba(255,255,255,0.05);--shadow:0 1px 3px rgba(0,0,0,0.3);--shadow-lg:0 10px 25px rgba(0,0,0,0.5);--accent:#6366f1;--accent-hover:#818cf8;--accent-bg:rgba(99,102,241,0.10);--green:#22c55e;--green-bg:rgba(34,197,94,0.08);--yellow:#eab308;--yellow-bg:rgba(234,179,8,0.08);--red:#ef4444;--red-bg:rgba(239,68,68,0.08);--blue:#3b82f6;--blue-bg:rgba(59,130,246,0.08);--sidebar-bg:#0d0d14;--sidebar-border:rgba(255,255,255,0.03);--card-bg:#111118;--input-bg:#1a1a24;--hover-bg:rgba(255,255,255,0.02)}
+body{font-family:var(--font);background:var(--bg);color:var(--text);overflow:hidden;height:100vh;transition:background .3s,color .3s}
+/* ── Layout ── */
+.layout{display:flex;height:100vh}
+/* ── Sidebar ── */
+.sidebar{width:220px;background:var(--sidebar-bg);border-right:1px solid var(--sidebar-border);display:flex;flex-direction:column;flex-shrink:0;transition:background .3s}
+.sidebar-logo{padding:20px 20px 14px;border-bottom:1px solid var(--border)}
+.sidebar-logo h1{font-size:15px;font-weight:700;letter-spacing:-0.3px;background:linear-gradient(135deg,var(--accent),#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sidebar-logo span{font-size:10px;color:var(--text3);margin-top:2px;display:block;-webkit-text-fill-color:var(--text3)}
+.sidebar-nav{flex:1;padding:10px 0;overflow-y:auto}
+.nav-section{padding:12px 20px 4px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 20px;cursor:pointer;font-size:13px;color:var(--text2);transition:var(--transition);border-right:2px solid transparent;position:relative}
+.nav-item:hover{color:var(--text);background:var(--hover-bg)}
+.nav-item.active{color:var(--accent);background:var(--accent-bg);border-right-color:var(--accent)}
+.nav-item .icon{width:18px;text-align:center;font-size:14px;flex-shrink:0}
+.nav-item .badge{margin-left:auto;font-size:10px;padding:1px 8px;border-radius:10px;background:var(--accent-bg);color:var(--accent);font-weight:500}
+.sidebar-footer{margin-top:auto;padding:14px 20px;border-top:1px solid var(--border);font-size:11px}
+.status-row{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.status-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dot-online{background:var(--green);box-shadow:0 0 6px rgba(34,197,94,0.3)}
+.dot-offline{background:var(--text3)}
+.dot-warning{background:var(--yellow)}
+/* ── Main ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 28px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;transition:background .3s}
+.topbar-left{display:flex;align-items:center;gap:14px}
+.topbar-left h2{font-size:16px;font-weight:600;letter-spacing:-0.2px}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.theme-btn{background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:14px;transition:var(--transition)}
+.theme-btn:hover{border-color:var(--text3);color:var(--text)}
+.select-mini{background:var(--input-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 10px;color:var(--text2);font-size:11px;font-family:var(--font);outline:none;cursor:pointer;transition:var(--transition)}
+.select-mini:focus{border-color:var(--accent)}
+.content{flex:1;overflow-y:auto;padding:24px 28px 28px}
+/* ── Components ── */
+.card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:var(--transition)}.card:hover{box-shadow:var(--shadow)}
+.card-title{font-size:10px;font-weight:600;color:var(--text3);margin-bottom:14px;text-transform:uppercase;letter-spacing:0.8px}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.stat-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;transition:var(--transition)}.stat-card:hover{box-shadow:var(--shadow);border-color:var(--accent)}
+.stat-num{font-size:28px;font-weight:700;letter-spacing:-1px;line-height:1.1}
+.stat-label{font-size:12px;color:var(--text2);margin-top:4px}
+.stat-foot{font-size:11px;margin-top:6px;display:flex;align-items:center;gap:4px}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 16px;border-radius:var(--radius-sm);font-size:12px;font-weight:500;border:none;cursor:pointer;transition:var(--transition);font-family:var(--font);white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover);box-shadow:0 4px 12px rgba(99,102,241,0.25)}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text2)}.btn-outline:hover{border-color:var(--text3);color:var(--text);background:var(--hover-bg)}
+.btn-ghost{background:transparent;color:var(--text2);padding:6px 10px}.btn-ghost:hover{color:var(--text);background:var(--hover-bg)}
+.btn-sm{padding:5px 12px;font-size:11px}
+.btn-xs{padding:3px 8px;font-size:10px;border-radius:4px}
+.btn-success{background:var(--green-bg);color:var(--green);border:1px solid rgba(5,150,105,0.15)}.btn-success:hover{background:rgba(5,150,105,0.15)}
+.btn-danger{background:var(--red-bg);color:var(--red);border:1px solid rgba(220,38,38,0.15)}.btn-danger:hover{background:rgba(220,38,38,0.15)}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:500;line-height:1.5}
+.chip-green{background:var(--green-bg);color:var(--green)}
+.chip-yellow{background:var(--yellow-bg);color:var(--yellow)}
+.chip-red{background:var(--red-bg);color:var(--red)}
+.chip-blue{background:var(--blue-bg);color:var(--blue)}
+.chip-gray{background:var(--bg3);color:var(--text3)}
+input,select{background:var(--input-bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;color:var(--text);font-size:13px;font-family:var(--font);outline:none;width:100%;transition:var(--transition)}
+input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+label{font-size:12px;color:var(--text2);display:block;margin-bottom:5px;font-weight:500}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px}
+.tabs{display:flex;gap:2px;background:var(--bg3);border-radius:var(--radius-sm);padding:2px;width:fit-content}
+.tab{padding:5px 12px;border-radius:5px;font-size:11px;font-weight:500;cursor:pointer;color:var(--text2);border:none;background:transparent;transition:var(--transition)}
+.tab.active{background:var(--card-bg);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,0.05)}
+.tab:hover:not(.active){color:var(--text)}
+/* ── Progress ── */
+.task-card{border-radius:var(--radius);padding:20px;margin-bottom:16px;border:1px solid var(--accent);background:var(--card-bg);transition:var(--transition)}
+.task-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.task-name{font-size:14px;font-weight:600}
+.task-meta{font-size:12px;color:var(--text2)}
+.pbar{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-bottom:14px}
+.pfill{height:100%;background:linear-gradient(90deg,var(--accent),#a78bfa);border-radius:2px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+.steps{display:grid;gap:3px}
+.step{display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:6px;font-size:12px;transition:var(--transition)}
+.step:hover{background:var(--hover-bg)}
+.step-icon{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+.step-done .step-icon{background:var(--green-bg);color:var(--green)}
+.step-doing .step-icon{background:var(--accent-bg);color:var(--accent);animation:spin 1.5s linear infinite}
+.step-pending .step-icon{background:var(--bg3);color:var(--text3)}
+.step-label{flex:1}
+.step-time{font-size:10px;color:var(--text3);font-family:var(--mono)}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+/* ── Log ── */
+.log-box{background:var(--bg3);border-radius:var(--radius);padding:14px 16px;font-family:var(--mono);font-size:11px;height:130px;overflow-y:auto;line-height:1.7;transition:background .3s}
+.log-line{white-space:nowrap;display:flex;gap:8px;align-items:center}
+.log-time{color:var(--text3);flex-shrink:0;width:60px}
+.log-ico{flex-shrink:0;width:14px;text-align:center}
+.log-check{color:var(--green)}.log-arrow{color:var(--accent)}.log-warn{color:var(--yellow)}
+/* ── Tables ── */
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:10px 12px;color:var(--text3);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border)}
+td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:12px}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--hover-bg)}
+/* ── Modal ── */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center}
+.modal.open{display:flex}
+.modal-box{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:28px;width:440px;box-shadow:var(--shadow-lg);animation:fadeUp .25s}
+.modal-box h3{font-size:16px;font-weight:600;margin-bottom:6px}
+.modal-box p{font-size:13px;color:var(--text2);margin-bottom:16px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+/* ── Misc ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+.fade-in{animation:fadeIn .3s both}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.divider{height:1px;background:var(--border);margin:16px 0}
+.alert{padding:10px 14px;border-radius:var(--radius-sm);font-size:12px;display:flex;align-items:center;gap:8px;margin-top:12px}
+.alert-red{background:var(--red-bg);border:1px solid rgba(220,38,38,0.12)}
+.alert-yellow{background:var(--yellow-bg);border:1px solid rgba(217,119,6,0.12)}
+</style>
+</head>
+<body class="dark">
+
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Agent Terminal</h1>
+      <span>凭证采集工作站 v1.0</span>
+    </div>
+    <div class="nav-section">导航</div>
+    <div class="sidebar-nav">
+      <div class="nav-item" onclick="switchPage('dashboard',this)"><span class="icon">◉</span>仪表盘</div>
+      <div class="nav-item active" onclick="switchPage('tasks',this)"><span class="icon">◈</span>采集任务<span class="badge">2</span></div>
+      <div class="nav-item" onclick="switchPage('inventory',this)"><span class="icon">◐</span>库存管理</div>
+      <div class="nav-item" onclick="switchPage('accounts',this)"><span class="icon">◎</span>账号管理<span class="badge" style="background:var(--yellow-bg);color:var(--yellow)">1</span></div>
+      <div class="nav-item" onclick="switchPage('logs',this)"><span class="icon">≡</span>日志</div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="status-row"><span class="status-dot dot-online"></span><span>平台已连接</span></div>
+      <div class="status-row" style="font-size:10px;color:var(--text3)"><span class="status-dot dot-online"></span>JD · <span class="status-dot dot-warning"></span>TB · <span class="status-dot dot-offline"></span>DY</div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <h2 id="pageTitle">采集任务</h2>
+      </div>
+      <div class="topbar-right">
+        <select class="select-mini"><option>agent_jd_01</option><option>agent_jd_02 🟡</option></select>
+        <select class="select-mini"><option>模拟器: 运行中</option><option>模拟器: 停止</option></select>
+        <button class="theme-btn" onclick="toggleTheme()" id="themeBtn">☀</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- ════ Dashboard ════ -->
+      <div id="pg-dashboard" class="page" style="display:none">
+        <div class="stat-grid fade-in">
+          <div class="stat-card"><div class="stat-num">128</div><div class="stat-label">库存总量</div><div class="stat-foot" style="color:var(--green)">↑ 12 今日</div></div>
+          <div class="stat-card"><div class="stat-num">85</div><div class="stat-label">可用</div><div class="stat-foot" style="color:var(--text2)">已消耗 38 · 过期 5</div></div>
+          <div class="stat-card"><div class="stat-num">45</div><div class="stat-label">今日采集</div><div class="stat-foot" style="color:var(--accent)">浏览器 32 · 模拟器 13</div></div>
+          <div class="stat-card"><div class="stat-num">38</div><div class="stat-label">今日消耗</div><div class="stat-foot" style="color:var(--green)">API 订单消耗</div></div>
+        </div>
+        <div class="card fade-in" style="animation-delay:.08s">
+          <div class="card-title">库存健康度</div>
+          <div style="display:grid;gap:14px">
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span>京东E卡 100元</span><span style="color:var(--green);font-weight:600">80/100</span></div><div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="width:80%;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--green),#10b981)"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span>京东E卡 50元</span><span style="color:var(--yellow);font-weight:600">20/50</span></div><div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="width:40%;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--yellow),#f59e0b)"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span>游戏点卡 50元</span><span style="color:var(--red);font-weight:600">5/50</span></div><div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="width:10%;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--red),#f43f5e)"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span>话费充值 30元</span><span style="color:var(--green);font-weight:600">30/30</span></div><div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="width:100%;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--green),#10b981)"></div></div></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button class="btn btn-primary" onclick="switchPage('tasks',document.querySelectorAll('.nav-item')[1])">◈ 新建采集任务</button>
+          <button class="btn btn-outline">检查所有账号</button>
+          <button class="btn btn-outline">批量上传</button>
+        </div>
+      </div>
+
+      <!-- ════ Tasks ════ -->
+      <div id="pg-tasks" class="page">
+        <div class="card" style="margin-bottom:18px">
+          <div class="card-title">新建采集任务</div>
+          <div class="form-row-3">
+            <div><label>目标平台</label><select id="selPlatform"><option>京东 JD</option><option>淘宝 TB</option><option>抖音 DY</option></select></div>
+            <div><label>目标货品</label><select id="selProduct"><option>京东E卡 100元</option><option>京东E卡 50元</option><option>游戏点卡 50元</option><option>话费充值 30元</option></select></div>
+            <div><label>采集数量</label><input type="number" id="inputQty" value="20"></div>
+          </div>
+          <div class="form-row-3">
+            <div><label>采集方式</label><select id="selMethod"><option>浏览器自动化</option><option>模拟器抓包</option><option>CDP 手动辅助</option><option>手动录入</option></select></div>
+            <div><label>自动化程度</label><select id="selAuto"><option>半自动（需扫码登录）</option><option>全自动（Cookie有效）</option><option>手动辅助（工具捕获）</option></select></div>
+            <div><label>使用账号</label><select id="selAccount"><option>agent_jd_01 🟢</option><option>agent_jd_02 🟡</option></select></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="btn btn-primary" onclick="startTask()">启动采集</button>
+            <button class="btn btn-outline" onclick="resetForm()">重置</button>
+          </div>
+        </div>
+
+        <!-- Live task -->
+        <div id="liveTask" style="display:none">
+          <div class="task-card">
+            <div class="task-header">
+              <span class="task-name" id="taskTitle">采集任务 #20250608-001</span>
+              <span class="task-meta" id="taskStats">0 / 20 完成</span>
+            </div>
+            <div class="pbar"><div class="pfill" id="progressFill" style="width:0%"></div></div>
+            <div class="steps" id="stepList">
+              <div class="step step-done"><span class="step-icon">✓</span><span class="step-label">打开京东</span><span class="step-time" id="st1"></span></div>
+              <div class="step step-done"><span class="step-icon">✓</span><span class="step-label">注入 Cookie</span><span class="step-time" id="st2"></span></div>
+              <div class="step step-done"><span class="step-icon">✓</span><span class="step-label">登录验证</span><span class="step-time" id="st3"></span></div>
+              <div class="step step-done"><span class="step-icon">✓</span><span class="step-label">导航到E卡购买页</span><span class="step-time" id="st4"></span></div>
+              <div class="step step-done"><span class="step-icon">✓</span><span class="step-label">选择面额 100元</span><span class="step-time" id="st5"></span></div>
+              <div class="step step-doing" id="step6"><span class="step-icon">⟳</span><span class="step-label">下单 — 第 <span id="currentItem">1</span> / <span id="totalItems">20</span> 张</span><span class="step-time" id="st6"></span></div>
+              <div class="step step-pending" id="step7"><span class="step-icon">○</span><span class="step-label">获取支付链接</span><span class="step-time"></span></div>
+              <div class="step step-pending" id="step8"><span class="step-icon">○</span><span class="step-label">验证链接有效性</span><span class="step-time"></span></div>
+              <div class="step step-pending" id="step9"><span class="step-icon">○</span><span class="step-label">保存 + 上传平台</span><span class="step-time"></span></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+              <span class="card-title" style="margin-bottom:0">实时日志</span>
+              <span style="font-size:11px;color:var(--text2)">已采集 <span id="collectedCount">0</span> / <span id="totalItems2">20</span></span>
+            </div>
+            <div class="log-box" id="logArea">
+              <div class="log-line"><span class="log-time">10:23:45</span><span class="log-ico log-check">✓</span><span>浏览器实例已启动</span></div>
+              <div class="log-line"><span class="log-time">10:23:46</span><span class="log-ico">·</span><span>导航到 card.jd.com</span></div>
+              <div class="log-line"><span class="log-time">10:23:48</span><span class="log-ico log-check">✓</span><span>Cookie 注入成功</span></div>
+              <div class="log-line"><span class="log-time">10:23:49</span><span class="log-ico log-check">✓</span><span>登录验证通过</span></div>
+              <div class="log-line"><span class="log-time">10:23:52</span><span class="log-ico">·</span><span>选择面额 100元 × 1 张</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">采集队列</div>
+            <table>
+              <thead><tr><th style="width:50px">状态</th><th>任务</th><th>平台</th><th>数量</th><th>方式</th><th>进度</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.2s infinite;vertical-align:middle"></span></td><td>京东E卡 100元</td><td><span class="chip chip-blue">JD</span></td><td><span id="queueTotal">20</span></td><td>半自动</td><td><span id="queueProgress">0/20</span></td><td><button class="btn btn-sm btn-outline">暂停</button></td></tr>
+                <tr><td><span style="color:var(--text3)">⏸</span></td><td>淘宝充值 50元</td><td><span class="chip chip-gray">TB</span></td><td>30</td><td>全自动</td><td>暂停</td><td><button class="btn btn-sm btn-outline">继续</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ Inventory ════ -->
+      <div id="pg-inventory" class="page" style="display:none">
+        <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center">
+          <div class="tabs">
+            <span class="tab active">全部(128)</span>
+            <span class="tab">可用(85)</span>
+            <span class="tab">已消耗(38)</span>
+            <span class="tab">已过期(5)</span>
+            <span class="tab">待上传(12)</span>
+          </div>
+          <input style="width:220px;margin-left:auto" placeholder="搜索资源ID、货品...">
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <table>
+            <thead><tr><th style="width:30px"><input type="checkbox"></th><th>ID</th><th>货品</th><th>面额</th><th>来源</th><th>方式</th><th>状态</th><th>到期</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr><td><input type="checkbox"></td><td style="font-family:var(--mono);font-size:11px;color:var(--text3)">R01</td><td>京东E卡</td><td>100</td><td><span class="chip chip-blue">JD</span></td><td><span class="chip chip-green">自动</span></td><td><span class="chip chip-green">可用</span></td><td>2h</td><td><button class="btn btn-xs btn-ghost">复制</button></td></tr>
+              <tr><td><input type="checkbox"></td><td style="font-family:var(--mono);font-size:11px;color:var(--text3)">R02</td><td>京东E卡</td><td>100</td><td><span class="chip chip-blue">JD</span></td><td><span class="chip chip-green">自动</span></td><td><span class="chip chip-green">可用</span></td><td>2h</td><td><button class="btn btn-xs btn-ghost">复制</button></td></tr>
+              <tr><td><input type="checkbox"></td><td style="font-family:var(--mono);font-size:11px;color:var(--text3)">R03</td><td>京东E卡</td><td>100</td><td><span class="chip chip-blue">JD</span></td><td><span class="chip chip-yellow">模拟器</span></td><td><span class="chip chip-gray">已消耗</span></td><td>-</td><td><button class="btn btn-xs btn-ghost">详情</button></td></tr>
+              <tr><td><input type="checkbox"></td><td style="font-family:var(--mono);font-size:11px;color:var(--text3)">R04</td><td>游戏点卡</td><td>50</td><td><span class="chip chip-gray">TB</span></td><td><span class="chip chip-gray">手动</span></td><td><span class="chip chip-yellow">待上传</span></td><td>48h</td><td><button class="btn btn-xs btn-success">上传</button></td></tr>
+              <tr><td><input type="checkbox"></td><td style="font-family:var(--mono);font-size:11px;color:var(--text3)">R05</td><td>话费充值</td><td>30</td><td><span class="chip chip-blue">JD</span></td><td><span class="chip chip-green">自动</span></td><td><span class="chip chip-green">可用</span></td><td>6h</td><td><button class="btn btn-xs btn-ghost">复制</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn btn-sm btn-primary">上传选中(2)</button>
+          <button class="btn btn-sm btn-outline">删除过期</button>
+          <button class="btn btn-sm btn-outline">导出 CSV</button>
+        </div>
+        <div class="alert alert-red"><span>🔴</span><span><strong>紧急：</strong>话费充值30元 仅剩 5 张（低于阈值 10）</span><button class="btn btn-sm btn-success" style="margin-left:auto" onclick="switchPage('tasks',document.querySelectorAll('.nav-item')[1])">立即补货</button></div>
+      </div>
+
+      <!-- ════ Accounts ════ -->
+      <div id="pg-accounts" class="page" style="display:none">
+        <div style="display:grid;gap:12px">
+          <div class="card" style="border-left:3px solid var(--green)">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div><span class="chip chip-blue">京东</span><strong style="margin-left:8px;font-size:13px">agent_jd_01</strong><span class="chip chip-green" style="margin-left:6px">在线</span></div>
+              <div style="font-size:11px;color:var(--text2)">Cookie 7天有效 · 今日采集 22 张</div>
+            </div>
+            <div style="margin-top:10px;display:flex;gap:6px">
+              <button class="btn btn-sm btn-outline">检查状态</button>
+              <button class="btn btn-sm btn-outline">导出 Cookie</button>
+              <button class="btn btn-sm btn-outline" style="color:var(--red)">移除</button>
+            </div>
+          </div>
+          <div class="card" style="border-left:3px solid var(--yellow)">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div><span class="chip chip-blue">京东</span><strong style="margin-left:8px;font-size:13px">agent_jd_02</strong><span class="chip chip-yellow" style="margin-left:6px">即将过期(2h)</span></div>
+              <div style="font-size:11px;color:var(--text2)">上次使用: 昨天 18:00</div>
+            </div>
+            <div style="margin-top:10px;display:flex;gap:6px">
+              <button class="btn btn-sm btn-success">刷新登录</button>
+              <button class="btn btn-sm btn-outline">扫码登录</button>
+              <button class="btn btn-sm btn-outline" style="color:var(--red)">移除</button>
+            </div>
+          </div>
+          <div class="card" style="border-left:3px solid var(--red)">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div><span class="chip chip-gray">淘宝</span><strong style="margin-left:8px;font-size:13px">agent_tb_01</strong><span class="chip chip-red" style="margin-left:6px">已离线</span></div>
+              <div style="font-size:11px;color:var(--text2)">Cookie 已过期 · 3天前</div>
+            </div>
+            <div style="margin-top:10px;display:flex;gap:6px">
+              <button class="btn btn-sm btn-primary">扫码登录</button>
+              <button class="btn btn-sm btn-outline">手动导入 Cookie</button>
+              <button class="btn btn-sm btn-outline" style="color:var(--red)">移除</button>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:14px">+ 添加平台账号</button>
+
+        <div class="divider"></div>
+        <div class="card-title">模拟器管理</div>
+        <div class="card" style="border-left:3px solid var(--green);margin-top:2px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong style="font-size:13px">夜神模拟器 v7.0</strong><span class="chip chip-green" style="margin-left:6px">运行中</span></div>
+            <div style="font-size:11px;color:var(--text2)">CPU 23% · RAM 2.1GB</div>
+          </div>
+          <div style="margin-top:6px;font-size:11px;color:var(--text2)">已装: 京东(登录中) · 淘宝(已登录) · 抖音(未登录)</div>
+          <div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-sm btn-outline">重启</button><button class="btn btn-sm btn-outline">快照管理</button><button class="btn btn-sm btn-outline">安装 App</button></div>
+        </div>
+      </div>
+
+      <!-- ════ Logs ════ -->
+      <div id="pg-logs" class="page" style="display:none">
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <select class="select-mini" style="width:auto"><option>全部级别</option><option>成功</option><option>警告</option><option>错误</option></select>
+          <select class="select-mini" style="width:auto"><option>全部模块</option><option>采集</option><option>上传</option><option>账号</option><option>系统</option></select>
+          <div style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm btn-outline">自动滚动</button><button class="btn btn-sm btn-ghost">清空</button></div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="log-box" style="height:auto;max-height:520px;background:transparent;padding:12px 16px">
+            <div class="log-line"><span class="log-time">10:23</span><span class="log-ico log-check">✓</span><span>京东E卡 R01 已获取支付链接</span></div>
+            <div class="log-line"><span class="log-time">10:23</span><span class="log-ico log-arrow">↑</span><span>R01 已上传 → PRES-xxx</span></div>
+            <div class="log-line"><span class="log-time">10:22</span><span class="log-ico log-warn">⚠</span><span>游戏点卡 淘宝 需扫码登录</span></div>
+            <div class="log-line"><span class="log-time">10:20</span><span class="log-ico log-check">✓</span><span>模拟器 mitmproxy 证书安装完成</span></div>
+            <div class="log-line"><span class="log-time">10:15</span><span class="log-ico" style="color:var(--red)">✗</span><span>抖音 自动登录失败: 验证码超时</span></div>
+            <div class="log-line"><span class="log-time">10:14</span><span class="log-ico log-warn">ℹ</span><span>库存预警: 话费充值低于阈值</span></div>
+            <div class="log-line"><span class="log-time">10:10</span><span class="log-ico log-check">✓</span><span>agent_jd_01 Cookie 续期成功</span></div>
+            <div class="log-line"><span class="log-time">10:05</span><span class="log-ico log-arrow">↑</span><span>批量上传 5 张 成功</span></div>
+            <div class="log-line"><span class="log-time">10:00</span><span class="log-ico log-check">✓</span><span>京东E卡 R02-R06 批量采集完成</span></div>
+            <div class="log-line"><span class="log-time">09:55</span><span class="log-ico log-warn">ℹ</span><span>WebSocket 断线重连成功</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- QR Modal -->
+<div class="modal" id="qrModal">
+  <div class="modal-box" style="text-align:center">
+    <h3>扫码登录</h3>
+    <p>请使用京东 App 扫描二维码</p>
+    <div style="width:160px;height:160px;margin:8px auto 12px;background:var(--bg3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:60px;color:var(--text3)">⊞</div>
+    <div style="font-size:12px;color:var(--text2)">等待扫码 <span id="qrTimer">10</span>s</div>
+    <div style="margin-top:14px"><button class="btn btn-outline" onclick="closeQR()">取消</button></div>
+  </div>
+</div>
+
+<script>
+let isDark = true;
+function toggleTheme() {
+  isDark = !isDark;
+  document.body.className = isDark ? 'dark' : 'light';
+  document.getElementById('themeBtn').textContent = isDark ? '☀' : '☾';
+}
+function switchPage(name, el) {
+  document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+  document.getElementById('pg-'+name).style.display = 'block';
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+  const t = {dashboard:'仪表盘',tasks:'采集任务',inventory:'库存管理',accounts:'账号管理',logs:'日志'};
+  document.getElementById('pageTitle').textContent = t[name]||name;
+}
+function resetForm() {
+  document.getElementById('selPlatform').value='京东 JD';document.getElementById('selProduct').value='京东E卡 100元';
+  document.getElementById('inputQty').value=20;document.getElementById('selMethod').value='浏览器自动化';
+  document.getElementById('selAuto').value='半自动（需扫码登录）';document.getElementById('selAccount').value='agent_jd_01 🟢';
+}
+let taskRunning=false,taskInterval=null,collected=0,total=20;
+function startTask(){
+  if(taskRunning)return;
+  taskRunning=true;collected=0;total=parseInt(document.getElementById('inputQty').value)||20;
+  document.getElementById('liveTask').style.display='block';
+  document.getElementById('totalItems').textContent=total;document.getElementById('totalItems2').textContent=total;
+  document.getElementById('queueTotal').textContent=total;
+  const id=Math.floor(Math.random()*9)+1;document.getElementById('taskTitle').textContent=`采集任务 #20250608-00${id}`;
+  document.getElementById('taskStats').textContent=`0 / ${total} 完成`;document.getElementById('progressFill').style.width='0%';
+  document.getElementById('collectedCount').textContent='0';document.getElementById('queueProgress').textContent=`0/${total}`;
+  ['step6','step7','step8','step9'].forEach(s=>{const e=document.getElementById(s);if(e)e.className='step step-pending'});
+  ['st1','st2','st3','st4','st5','st6'].forEach(id=>document.getElementById(id).textContent='');
+  // QR modal
+  document.getElementById('qrModal').classList.add('open');let qt=10;
+  document.getElementById('qrTimer').textContent=qt;
+  const qi=setInterval(()=>{qt--;document.getElementById('qrTimer').textContent=qt;if(qt<=0){clearInterval(qi);closeQR();runCollect()}},1000);
+}
+function closeQR(){document.getElementById('qrModal').classList.remove('open')}
+function runCollect(){
+  const logs=['浏览器实例已启动 (Chromium headless)','导航到 card.jd.com 成功','Cookie 注入: agent_jd_01','登录验证通过','已选择 京东E卡 100元 × 1 张','开始循环采集...'];
+  logs.forEach((msg,i)=>{setTimeout(()=>addLog('check',msg),i*600)});
+  ['st1','st2','st3','st4','st5'].forEach((id,i)=>{
+    setTimeout(()=>{const e=document.getElementById(id);if(e){const d=new Date();e.textContent=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`}},400+i*500)
+  });
+  setTimeout(()=>{
+    document.getElementById('step6').className='step step-doing';
+    document.getElementById('step7').className='step step-pending';
+    document.getElementById('st6').textContent=new Date().toTimeString().slice(0,8);
+  },3000);
+  let c=0;
+  taskInterval=setInterval(()=>{
+    c++;collected=c;document.getElementById('currentItem').textContent=c;
+    document.getElementById('collectedCount').textContent=c;document.getElementById('queueProgress').textContent=`${c}/${total}`;
+    const pct=c/total*100;document.getElementById('progressFill').style.width=Math.min(pct,100)+'%';
+    document.getElementById('taskStats').textContent=`${c} / ${total} 完成`;
+    if(c===1){document.getElementById('step6').className='step step-done';document.getElementById('step7').className='step step-doing'}
+    if(c===Math.floor(total/2)){document.getElementById('step7').className='step step-done';document.getElementById('step8').className='step step-doing'}
+    const t=new Date(),ts=`${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
+    addLog('check',`第 ${c} 张: 已获取支付链接 · 已上传平台`);
+    if(c>=total){
+      clearInterval(taskInterval);taskRunning=false;
+      document.getElementById('step8').className='step step-done';document.getElementById('step9').className='step step-done';
+      addLog('check',`🎉 采集完成！共 ${total} 张，全部上传平台`);
+      addLog('arrow',`冻结积分: ${total*100}（按面值 1:1 担保）`);
+    }
+  },1200);
+}
+function addLog(type,msg){
+  const el=document.getElementById('logArea'),t=new Date();
+  const ts=`${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
+  const d=document.createElement('div');d.className='log-line';
+  const ic=type==='check'?'log-check':type==='arrow'?'log-arrow':'';
+  const sym=type==='check'?'✓':type==='arrow'?'↑':'·';
+  d.innerHTML=`<span class="log-time">${ts}</span><span class="log-ico ${ic}">${sym}</span><span>${msg}</span>`;
+  el.appendChild(d);el.scrollTop=el.scrollHeight;
+}
+document.querySelector('.nav-item.active')?.click();
+</script>
+</body>
+</html>

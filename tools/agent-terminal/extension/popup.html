@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 380px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 0;
+    }
+    .header {
+      background: linear-gradient(135deg, #16213e, #0f3460);
+      padding: 16px;
+      border-bottom: 1px solid #2a2a4a;
+    }
+    .title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e94560;
+    }
+    .subtitle {
+      font-size: 11px;
+      color: #888;
+      margin-top: 2px;
+    }
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .status-dot.online { background: #4ade80; }
+    .status-dot.offline { background: #f87171; }
+    .status-dot.paused { background: #fbbf24; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #16213e;
+    }
+    .stat-item { text-align: center; }
+    .stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: #e94560;
+    }
+    .stat-label {
+      font-size: 10px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #aaa;
+      padding: 12px 16px 6px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .credential-item {
+      padding: 8px 16px;
+      border-bottom: 1px solid #2a2a4a;
+      font-size: 12px;
+    }
+    .credential-item:last-child { border-bottom: none; }
+    .cred-product {
+      color: #e94560;
+      font-weight: 600;
+    }
+    .cred-type {
+      color: #4ade80;
+      font-size: 10px;
+    }
+    .cred-value {
+      color: #999;
+      font-size: 11px;
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .cred-time {
+      color: #666;
+      font-size: 10px;
+      margin-top: 2px;
+    }
+
+    .empty {
+      padding: 24px 16px;
+      text-align: center;
+      color: #666;
+      font-size: 12px;
+    }
+
+    .footer {
+      padding: 10px 16px;
+      border-top: 1px solid #2a2a4a;
+      font-size: 11px;
+      color: #666;
+      display: flex;
+      justify-content: space-between;
+    }
+    .footer a {
+      color: #e94560;
+      text-decoration: none;
+    }
+
+    .platform-list {
+      padding: 0 16px 8px;
+      font-size: 11px;
+      color: #888;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .platform-tag {
+      background: #2a2a4a;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">⚡ Agent Terminal</div>
+    <div class="subtitle">支付凭证采集器</div>
+    <div class="status-bar">
+      <span class="status-dot offline" id="statusDot"></span>
+      <span id="statusText">检测后端...</span>
+      <span style="margin-left: auto;" id="tabCount">0 标签页</span>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-item">
+      <div class="stat-value" id="captureCount">0</div>
+      <div class="stat-label">已采集</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="platformCount">0</div>
+      <div class="stat-label">平台</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="queueCount">0</div>
+      <div class="stat-label">缓冲</div>
+    </div>
+  </div>
+
+  <div class="section-title">活跃平台</div>
+  <div class="platform-list" id="platformList">
+    <span class="platform-tag">QQ Midas</span>
+  </div>
+
+  <div class="section-title">最近采集</div>
+  <div id="credentialList">
+    <div class="empty">等待支付凭证采集...</div>
+    <div class="empty" style="font-size:10px;padding-top:0;">
+      在 pay.qq.com 上选择 Q币 → 点击支付 → 自动采集
+    </div>
+  </div>
+
+  <div class="footer">
+    <span id="backendStatus">后端: 未连接</span>
+    <a href="#" onclick="chrome.tabs.create({url:'http://localhost:8801'});return false">管理平台</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

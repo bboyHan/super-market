@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Agent Terminal — 支付凭证采集器",
+  "version": "1.0.0",
+  "description": "自动拦截支付平台的 postMessage，提取支付链接/凭证，发送到本地采集后端",
+  "author": "Agent Terminal",
+  "homepage_url": "http://localhost:8801",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "storage",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "https://pay.qq.com/*",
+    "https://graph.qq.com/*",
+    "https://api.unipay.qq.com/*",
+    "http://localhost:8801/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://pay.qq.com/*",
+        "https://graph.qq.com/*"
+      ],
+      "js": ["platforms/qq_midas.js", "content.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Agent Terminal"
+  }
+}
