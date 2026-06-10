@@ -4,3 +4,11 @@ venv/
 *.egg-info/
 __pycache__/
 *.pyc
+
+# Node
+node_modules/
+dist/
+.local/
+
+# Hermes
+.hermes/
