@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Oracle.Extractor")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c64306371a48fb62defd2cb75a4b51bdf07a402d")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1949ec7c79d32fe029aa52d406447c34946ee297")]
 [assembly: System.Reflection.AssemblyProductAttribute("Oracle.Extractor")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Oracle.Extractor")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

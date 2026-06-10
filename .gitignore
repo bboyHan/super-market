@@ -19,3 +19,4 @@ server/oracle/**/*.user
 **/bin/
 **/obj/
 web/.npm-cache/
+server/logs/

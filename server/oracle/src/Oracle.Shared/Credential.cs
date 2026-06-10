@@ -41,5 +41,6 @@ public class Credential
         openid = OpenId,
         pay_method = PayMethod,
         body = Metadata.GetValueOrDefault("request_body", ""),
+        metadata = new Dictionary<string, string>(Metadata),
     };
 }

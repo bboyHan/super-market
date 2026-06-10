@@ -31,6 +31,30 @@ for (int i = 0; i < args.Length; i++)
         config.TlsProxyPort = int.Parse(args[++i]);
     if (args[i] == "--backend" && i + 1 < args.Length)
         config.BackendUrl = args[++i];
+    if (args[i] == "--install-cert")
+    {
+        Console.WriteLine("[Oracle] Installing root CA certificate...");
+        var mgr = new CertificateManager(config);
+        try
+        {
+            var derData = mgr.ExportRootCaCert();
+            var tempCer = Path.Combine(Path.GetTempPath(), "oracle_ca.cer");
+            File.WriteAllBytes(tempCer, derData);
+            var psi = new System.Diagnostics.ProcessStartInfo("certutil", $"-addstore -f Root \"{tempCer}\"")
+            {
+                Verb = "runas",
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi)?.WaitForExit(10000);
+            Console.WriteLine($"[Oracle] Certificate exported to {tempCer}");
+            Console.WriteLine("[Oracle] Run the above certutil command as Administrator to install.");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Oracle] Cert install error: {ex.Message}");
+        }
+        return;
+    }
 }
 
 // ── Services ──────────────────────────────────────────
@@ -178,17 +202,51 @@ app.MapPost("/inject", (Credential cred) =>
     return Results.Ok(new { status = "queued", id = cred.Id });
 });
 
+// ── Help API ────────────────────────────────────────
+
+app.MapGet("/help", () =>
+{
+    return Results.Ok(new
+    {
+        name = "神谕 (Oracle)",
+        version = "1.0.0",
+        description = "万能支付凭证采集引擎 — Universal Payment Credential Collector",
+        commands = new
+        {
+            @start = "POST /start — 启动捕获引擎 + TLS 代理",
+            @stop = "POST /stop — 停止捕获",
+            status = "GET /status — 运行状态和统计",
+            stats = "GET /stats — 详细统计",
+            config = "GET /config — 查看配置",
+            cert = "GET /cert — 下载根 CA 证书",
+            help = "GET /help — 本帮助",
+        },
+        proxy = $"HTTPS 代理: 127.0.0.1:{config.TlsProxyPort} (Chrome 设置代理到此地址)",
+        rules_loaded = ruleEngine.RuleCount,
+        platforms = ruleEngine.RuleCount > 0 ? "查看 platforms/ 目录" : "无规则加载",
+        install_cert = "运行: Oracle.Api.exe --install-cert (管理员)",
+    });
+});
+
 // ── Startup ──────────────────────────────────────────
 
 Console.WriteLine($@"
 ╔══════════════════════════════════════════════╗
-║          神谕 (Oracle) v1.0                 ║
+║        神谕 (Oracle) v1.0                    ║
 ║    万能支付凭证采集引擎                       ║
 ╠══════════════════════════════════════════════╣
-║  Management API  : http://{config.ApiBindAddress}:{config.ApiPort}  ║
-║  TLS Proxy      : 127.0.0.1:{config.TlsProxyPort}             ║
-║  Python Backend : {config.BackendUrl,-36}║
-║  Pay Domains    : {config.PayDomains.Length,-4} domains          ║
+║  HTTPS Proxy : 127.0.0.1:{config.TlsProxyPort}         ║
+║  API Server  : http://{config.ApiBindAddress}:{config.ApiPort}   ║
+║  Backend     : {config.BackendUrl,-36}║
+║  Rules       : {ruleEngine.RuleCount,-2} platform rules loaded    ║
+║  Domains     : {config.PayDomains.Length,-2} payment domains       ║
+╠══════════════════════════════════════════════╣
+║  Quick start:                                  ║
+║  1. Set Chrome proxy to 127.0.0.1:{config.TlsProxyPort}      ║
+║  2. POST /start to begin capturing             ║
+║  3. Visit https://pay.qq.com and pay           ║
+║  4. GET /status to see captured credentials    ║
+║  5. GET /help for all commands                 ║
 ╚══════════════════════════════════════════════╝");
 
 // Export root CA certificate for browser trust
@@ -203,6 +261,19 @@ app.MapGet("/cert", () =>
     {
         return Results.Problem(ex.Message);
     }
+});
+
+// ── Graceful shutdown ──────────────────────────────
+
+var host = app;
+var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
+lifetime.ApplicationStopping.Register(() =>
+{
+    Console.WriteLine("[Oracle] Shutting down...");
+    captureService.Stop();
+    tlsProxy.Stop();
+    credQueue.Dispose();
+    Console.WriteLine("[Oracle] Credential queue flushed. Goodbye.");
 });
 
 app.Run();

@@ -102,7 +102,6 @@ public class TlsProxy : IAsyncDisposable
             if (bytesRead == 0) return;
 
             string? sni = null;
-            var isConnect = false;
 
             // Check if this is an HTTP CONNECT proxy request
             if (bytesRead > 8 && firstBytes[0] == (byte)'C' &&
@@ -110,7 +109,6 @@ public class TlsProxy : IAsyncDisposable
                 firstBytes[3] == (byte)'N' && firstBytes[4] == (byte)'E' &&
                 firstBytes[5] == (byte)'C' && firstBytes[6] == (byte)'T')
             {
-                isConnect = true;
                 var connectLine = System.Text.Encoding.ASCII.GetString(firstBytes, 0, bytesRead);
                 var parts = connectLine.Split(' ');
                 if (parts.Length >= 2)
@@ -209,7 +207,8 @@ public class TlsProxy : IAsyncDisposable
                     if (n == 0) break;
 
                     var requestData = buffer[..n];
-                    Console.Error.WriteLine($"[DEBUG] Client data: {System.Text.Encoding.UTF8.GetString(buffer, 0, Math.Min(n, 200))}");
+                    // [DEBUG] 取消注释可查看实时请求流量
+                    // Console.Error.WriteLine($"[DBG] {System.Text.Encoding.UTF8.GetString(buffer, 0, Math.Min(n, 200))}");
 
                     // Capture first request (method, path, body)
                     if (!requestCapture.Captured && n > 0)
