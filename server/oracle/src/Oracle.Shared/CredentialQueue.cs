@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using System.Net.Http.Json;
+using System.Text;
 using System.Text;
 using System.Text.Json;
 
@@ -65,9 +65,9 @@ public class CredentialQueue : IDisposable
             {
                 try
                 {
-                    var response = await _http.PostAsJsonAsync(
-                        $"{_config.BackendUrl}{_config.IngestEndpoint}",
-                        cred.ToIngestPayload());
+                    var json = JsonSerializer.Serialize(cred.ToIngestPayload());
+                    var content = new StringContent(json, Encoding.UTF8, "application/json");
+                    var response = await _http.PostAsync($"{_config.BackendUrl}{_config.IngestEndpoint}", content);
 
                     if (response.IsSuccessStatusCode)
                     {

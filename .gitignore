@@ -20,3 +20,4 @@ server/oracle/**/*.user
 **/obj/
 web/.npm-cache/
 server/logs/
+.claude/

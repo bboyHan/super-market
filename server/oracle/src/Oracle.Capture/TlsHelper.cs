@@ -11,27 +11,42 @@ public static class TlsHelper
 {
     /// <summary>
     /// Extract the SNI (Server Name Indication) from a TLS ClientHello.
-    /// Only the first 500 bytes typically need to be examined.
+    /// Handles both raw TLS records (from SslStream) and IP-encapsulated
+    /// TLS (from WinDivert kernel capture).
     /// Returns null if the data is not a valid ClientHello or SNI is not present.
     /// </summary>
     public static string? ExtractSni(ReadOnlySpan<byte> data)
     {
-        // Minimum ClientHello: 5 (TLS record) + 1 (handshake) + 3 (length)
-        // + 2 (version) + 32 (random) = 43 bytes minimum
         if (data.Length < 50) return null;
 
-        // TLS record type: 0x16 = Handshake
-        if (data[0] != 0x16) return null;
+        // Find TLS record type 0x16 (Handshake) in the data.
+        // WinDivert provides full IP packets (starting with IP header),
+        // while direct TLS streams start with the TLS record.
+        int start = 0;
+        if (data[0] != 0x16)
+        {
+            // Search for TLS handshake record within first 200 bytes
+            for (int i = 0; i < Math.Min(data.Length - 5, 200); i++)
+            {
+                if (data[i] == 0x16 && data[i + 1] == 0x03)
+                {
+                    start = i;
+                    break;
+                }
+            }
+            if (start == 0 && data[0] != 0x16) return null;
+        }
 
-        // TLS record version (major/minor) - skip 2 bytes
-        // Skip TLS record length (2 bytes) - positions 3-4
-        // Check handshake type: 0x01 = ClientHello at position 5
-        if (data[5] != 0x01) return null;
+        // TLS record type check (already matched at start)
+        // TLS record version (major/minor) - skip 2 bytes (start+1, start+2)
+        // Skip TLS record length (2 bytes) - positions start+3, start+4
+        // Check handshake type: 0x01 = ClientHello at position start+5
+        if (data[start + 5] != 0x01) return null;
 
-        // Skip: handshake length (3 bytes at 6-8), version (2 bytes at 9-10)
-        // Random (32 bytes starting at position 11)
+        // Skip: handshake length (3 bytes at start+6..8), version (2 bytes at start+9..10)
+        // Random (32 bytes starting at start+11)
         // Total fixed header: 5 + 4 + 2 + 32 = 43 bytes to session ID
-        int pos = 43;
+        int pos = start + 43;
 
         // --- Session ID ---
         if (pos >= data.Length) return null;

@@ -1,3 +1,0 @@
-﻿<Project>
-  <Import Project="..\build\Oracle.Api.props" />
-</Project>

@@ -114,6 +114,7 @@ app.MapGet("/status", () =>
         uptime_seconds = uptime.TotalSeconds,
         packets_captured = captureService.PacketsCaptured,
         packets_filtered = captureService.PacketsFiltered,
+        driver_packets = captureDriver is WinDivertDriver wd ? wd.DirectPacketCount : -1,
         active_connections = connTracker.ActiveCount,
         active_tls_sessions = tlsProxy.ActiveConnections,
         total_connections = tlsProxy.TotalConnections,
@@ -126,8 +127,10 @@ app.MapGet("/status", () =>
 // Start capture
 app.MapPost("/start", () =>
 {
-    captureService.Start();
+    // TLS proxy must start BEFORE WinDivert capture, because
+    // DIVERT mode immediately redirects payment traffic to it.
     tlsProxy.Start();
+    captureService.Start();
     return Results.Ok(new { status = "started" });
 });
 
