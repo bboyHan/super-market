@@ -312,7 +312,7 @@ public class TlsProxy : IAsyncDisposable
                                 Domain = sni,
                                 Method = requestCapture.Method,
                                 Path = requestCapture.Path,
-                                StatusCode = 200,
+                                StatusCode = ParseHttpStatus(fullResponse),
                                 RequestBody = requestCapture.Body,
                                 ResponseBody = fullResponse,
                                 ResponseBodyBase64 = Convert.ToBase64String(responseBuffer.ToArray()),
@@ -337,6 +337,14 @@ public class TlsProxy : IAsyncDisposable
         }, ct);
 
         await Task.WhenAny(clientTask, remoteTask);
+    }
+
+    private static int ParseHttpStatus(string response)
+    {
+        if (!response.StartsWith("HTTP/")) return 200;
+        var line = response.Split('\r', '\n')[0];
+        var parts = line.Split(' ');
+        return parts.Length >= 2 && int.TryParse(parts[1], out var c) ? c : 200;
     }
 
     public async ValueTask DisposeAsync()
