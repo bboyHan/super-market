@@ -34,6 +34,11 @@ public class NormalizedTransaction
     /// </summary>
     public string? ResponseBodyBase64 { get; set; }
 
+    /// <summary>响应头（小写 key）</summary>
+    public Dictionary<string, string> ResponseHeaders { get; set; } = new();
+    /// <summary>请求头（小写 key）</summary>
+    public Dictionary<string, string> RequestHeaders { get; set; } = new();
+
     // ── 快捷属性 ──
     public string Url => $"https://{Domain}{Path}";
     public string FullUrl => $"https://{Domain}{Path}{QueryString}";

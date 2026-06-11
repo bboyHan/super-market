@@ -161,6 +161,7 @@ public class MatcherRule
             "method" => tx.Method,
             "status" => tx.StatusCode.ToString(),
             "query" => tx.QueryString,
+            var h when h.StartsWith("header.") => LookupHeader(h, tx),
             _ => ""
         };
 
@@ -173,6 +174,14 @@ public class MatcherRule
             "not" => !target.Contains(Value, StringComparison.OrdinalIgnoreCase),
             _ => false
         };
+    }
+
+    private static string LookupHeader(string field, NormalizedTransaction tx)
+    {
+        var name = field["header.".Length..].Trim();
+        if (tx.ResponseHeaders.TryGetValue(name, out var v)) return v;
+        if (tx.RequestHeaders.TryGetValue(name, out var v2)) return v2;
+        return "";
     }
 }
 
@@ -205,6 +214,14 @@ public class ExtractorRule
     /// </summary>
     public string Pattern { get; set; } = "";
 
+    private static string LookupHeader(string field, NormalizedTransaction tx)
+    {
+        var name = field["header.".Length..].Trim();
+        if (tx.ResponseHeaders.TryGetValue(name, out var v)) return v;
+        if (tx.RequestHeaders.TryGetValue(name, out var v2)) return v2;
+        return "";
+    }
+
     private Regex? _compiled;
 
     /// <summary>
@@ -229,6 +246,7 @@ public class ExtractorRule
             "domain" => tx.Domain,
             "method" => tx.Method,
             "url" => tx.Url,
+            var h when h.StartsWith("header.") => LookupHeader(h, tx),
             _ => ""
         };
 

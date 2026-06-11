@@ -232,13 +232,16 @@ async function refresh() {
         d.items.slice().reverse().forEach(item => {
           const time = item.captured_at ? new Date(item.captured_at).toLocaleTimeString() : '-';
           const val = item.value || '';
-          const displayVal = val.length > 80 ? val.substring(0,77)+'...' : val;
-          tbody.innerHTML += `<tr>
-            <td>${time}</td>
-            <td>${item.platform || item.source || '-'}</td>
-            <td>${item.type || '-'}</td>
-            <td class="url-cell" title="${val}">${displayVal}</td>
-          </tr>`;
+          const type = item.type || '';
+          let displayHtml = '';
+          if (type === 'QrImage' && val.length > 100) {
+            displayHtml = '<img src="data:image/png;base64,'+val+'" style="max-height:80px;cursor:pointer;" onclick="window.open(this.src)">';
+          } else if (val.length > 120) {
+            displayHtml = '<span title="'+val.replace(/"/g,'&quot;')+'">'+val.substring(0,100)+'...</span>';
+          } else {
+            displayHtml = '<span title="'+val.replace(/"/g,'&quot;')+'">'+val+'</span>';
+          }
+          tbody.innerHTML += '<tr><td>'+time+'</td><td>'+(item.platform||item.source||'-')+'</td><td>'+type+'</td><td>'+displayHtml+'</td></tr>';
         });
         // Update stats with actual total
         document.getElementById('credTotal').textContent = d.total || 0;
