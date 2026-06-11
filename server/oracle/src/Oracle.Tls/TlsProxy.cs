@@ -173,6 +173,7 @@ public class TlsProxy : IAsyncDisposable
                 }
             }
 
+            
             if (!isPaymentDomain)
             {
                 Console.WriteLine($"[TlsProxy] ⟳ Transparent: {sni}");
