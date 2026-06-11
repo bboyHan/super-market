@@ -1,0 +1,13 @@
+{
+  "name": "qpay",
+  "description": "QQ 钱包支付",
+  "priority": 90,
+  "enabled": true,
+  "app": { "type": "browser", "domains": ["qpay.qq.com"] },
+  "matchers": [
+    {"field": "domain", "operator": "contains", "value": "qpay.qq.com"}
+  ],
+  "extractors": [
+    {"name": "qpay_url", "source": "response_body", "pattern": "qpay://[^\\s\"'<>)]+", "output_field": "value", "credential_type": "payment_url"}
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "tenpay",
+  "description": "微信支付 Tenpay",
+  "priority": 90,
+  "enabled": true,
+  "app": { "type": "browser", "domains": ["wx.tenpay.com", "tenpay.com"] },
+  "matchers": [
+    {"field": "domain", "operator": "regex", "value": "(wx\\.tenpay\\.com|tenpay\\.com)"}
+  ],
+  "fields": [
+    {"name": "支付链接", "source": "response_body", "pattern": "https?://wx\\.tenpay\\.com/[^\\s\"'<>]+", "output_field": "value"}
+  ]
+}
