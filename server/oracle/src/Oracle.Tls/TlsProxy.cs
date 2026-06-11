@@ -339,6 +339,23 @@ public class TlsProxy : IAsyncDisposable
         await Task.WhenAny(clientTask, remoteTask);
     }
 
+    private static Dictionary<string, string> ParseHttpHeaders(string response)
+    {
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // Parse HTTP headers from response (skip status line, stop at empty line)
+        var headerSection = response.Split(new[] { "\r\n\r\n", "\n\n" }, StringSplitOptions.None)[0];
+        var headerLines = headerSection.Split('\n');
+        for (int i = 1; i < headerLines.Length; i++) // skip HTTP status line
+        {
+            var hl = headerLines[i].Trim('\r', ' ');
+            if (string.IsNullOrEmpty(hl)) break;
+            var idx = hl.IndexOf(':');
+            if (idx > 0)
+                headers[hl[..idx].Trim().ToLower()] = hl[(idx + 1)..].Trim();
+        }
+        return headers;
+    }
+
     private static int ParseHttpStatus(string response)
     {
         if (!response.StartsWith("HTTP/")) return 200;
