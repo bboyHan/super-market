@@ -105,8 +105,7 @@ private static readonly string[] PayDomains = {
     {
         // DIVERT mode (flags=0): packets removed from stack.
         // Every Recv -> Send pair is mandatory.
-        // Capture all outbound TCP to port 443 (including SYNs, ACKs, data).
-        // DIVERT mode: every Recv MUST be paired with a Send.
+        // SNIFF mode: monitor HTTPS traffic without modification.
         var filter = "outbound and tcp.DstPort == 443 and tcp.PayloadLength > 0";
         _handle = WinDivertOpen(filter, WINDIVERT_LAYER_NETWORK, 0, 0x0001); /* SNIFF */
 
@@ -146,21 +145,28 @@ private static readonly string[] PayDomains = {
 
                 Interlocked.Increment(ref _directPacketCount);
 
-                var sni = TlsHelper.ExtractSni(new ReadOnlySpan<byte>(_packetBuffer, 0, recvLen));
+                // Detect protocol: byte 9 of IP header = 6 (TCP) or 17 (UDP)
+                var protocol = _packetBuffer[9];
 
-                // Fire event for all packets
-                var packet = new CapturedPacket
+                if (protocol == 17 && recvLen > 40)
                 {
-                    RawData = _packetBuffer[..recvLen],
-                    SrcAddr = new IPAddress(BitConverter.GetBytes(_addr.SrcAddr)),
-                    DstAddr = new IPAddress(BitConverter.GetBytes(_addr.DstAddr)),
-                    SrcPort = _addr.SrcPort,
-                    DstPort = _addr.DstPort,
-                };
-
-                // In SNIFF mode, packets pass through naturally.
-                // No modification or re-injection needed.
-                OnPacketCaptured?.Invoke(packet);
+                    // UDP packet — check for DNS response and spoof
+                    HandleDnsPacket(recvLen);
+                }
+                else if (protocol == 6)
+                {
+                    // TCP packet — extract SNI for monitoring
+                    var sni = TlsHelper.ExtractSni(new ReadOnlySpan<byte>(_packetBuffer, 0, recvLen));
+                    var packet = new CapturedPacket
+                    {
+                        RawData = _packetBuffer[..recvLen],
+                        SrcAddr = new IPAddress(BitConverter.GetBytes(_addr.SrcAddr)),
+                        DstAddr = new IPAddress(BitConverter.GetBytes(_addr.DstAddr)),
+                        SrcPort = _addr.SrcPort,
+                        DstPort = _addr.DstPort,
+                    };
+                    OnPacketCaptured?.Invoke(packet);
+                }
             }
         }
         catch (Exception ex)
@@ -168,6 +174,128 @@ private static readonly string[] PayDomains = {
             if (!_disposed)
                 Console.Error.WriteLine($"[WinDivert] Error: {ex.Message}");
         }
+    }
+
+    // ── DNS 劫持 ──────────────────────────────────────
+
+    private static readonly HashSet<string> DnsSpoofDomains = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "pay.qq.com.", "api.unipay.qq.com.", "pagedoo.pay.qq.com.",
+        "pagedooapi.pay.qq.com.", "storeapi.pay.qq.com.",
+        "wx.tenpay.com.", "tenpay.com.", "qpay.qq.com.",
+    };
+
+    private long _dnsSpoofedCount;
+    public long DnsSpoofedCount => Interlocked.Read(ref _dnsSpoofedCount);
+
+    private void HandleDnsPacket(int recvLen)
+    {
+        // IP header length
+        var ipHdrLen = (_packetBuffer[0] & 0x0F) * 4;
+        if (ipHdrLen < 20 || ipHdrLen + 8 > recvLen) return;
+
+        // DNS message starts after UDP header (8 bytes)
+        var dnsOff = ipHdrLen + 8;
+        var dnsLen = recvLen - dnsOff;
+        if (dnsLen < 12) return;
+
+        // Check DNS flags: must be a response (QR=1) with no error
+        var flags = (_packetBuffer[dnsOff + 2] << 8) | _packetBuffer[dnsOff + 3];
+        if ((flags & 0x8000) == 0) return;  // Not a response
+        if ((flags & 0x000F) != 0) return;  // Error
+
+        var qdCount = (_packetBuffer[dnsOff + 4] << 8) | _packetBuffer[dnsOff + 5];
+        var anCount = (_packetBuffer[dnsOff + 6] << 8) | _packetBuffer[dnsOff + 7];
+        if (qdCount == 0 || anCount == 0) return;
+
+        // Parse questions, find and spoof matching A records in answers
+        if (TrySpoofDnsAnswer(dnsOff, dnsLen))
+        {
+            Interlocked.Increment(ref _dnsSpoofedCount);
+        }
+    }
+
+    private bool TrySpoofDnsAnswer(int dnsOff, int dnsLen)
+    {
+        var pos = dnsOff + 12;  // After DNS header
+        var end = dnsOff + dnsLen;
+
+        // Skip questions
+        for (int i = 0; i < (_packetBuffer[dnsOff + 4] << 8 | _packetBuffer[dnsOff + 5]); i++)
+        {
+            pos = SkipDnsName(pos, end);
+            if (pos < 0) return false;
+            pos += 4;
+        }
+
+        // Try to spoof answers
+        var modified = false;
+        var anCount = (_packetBuffer[dnsOff + 6] << 8) | _packetBuffer[dnsOff + 7];
+
+        for (int i = 0; i < anCount; i++)
+        {
+            var name = ReadDnsName(ref pos, end, dnsOff);
+            if (name == null) return modified;
+
+            if (pos + 10 > end) return modified;
+            var type = (_packetBuffer[pos] << 8) | _packetBuffer[pos + 1];
+            var rdLen = (_packetBuffer[pos + 8] << 8) | _packetBuffer[pos + 9];
+            pos += 10;
+
+            if (type == 1 && rdLen == 4 && DnsSpoofDomains.Contains(name))
+            {
+                // Spoof! Replace with 127.0.0.1
+                _packetBuffer[pos] = 127;
+                _packetBuffer[pos + 1] = 0;
+                _packetBuffer[pos + 2] = 0;
+                _packetBuffer[pos + 3] = 1;
+                modified = true;
+            }
+            pos += rdLen;
+        }
+
+        return modified;
+    }
+
+    private string? ReadDnsName(ref int pos, int end, int dnsOff)
+    {
+        var labels = new List<string>();
+        var jumped = false;
+        var startPos = pos;
+
+        while (pos < end)
+        {
+            var len = _packetBuffer[pos];
+            if ((len & 0xC0) == 0xC0)
+            {
+                if (pos + 1 >= end) return null;
+                var ptr = ((len & 0x3F) << 8) | _packetBuffer[pos + 1];
+                if (!jumped) startPos = pos + 2;
+                pos = dnsOff + ptr;
+                jumped = true;
+                continue;
+            }
+            if (len == 0) break;
+            pos++;
+            if (pos + len > end) return null;
+            labels.Add(System.Text.Encoding.ASCII.GetString(_packetBuffer, pos, len));
+            pos += len;
+        }
+        if (!jumped) pos++;
+
+        return string.Join(".", labels) + ".";
+    }
+
+    private int SkipDnsName(int pos, int end)
+    {
+        while (pos < end)
+        {
+            var len = _packetBuffer[pos];
+            if ((len & 0xC0) == 0xC0) return pos + 2;
+            if (len == 0) return pos + 1;
+            pos += 1 + len;
+        }
+        return -1;
     }
 
     public void Dispose()
