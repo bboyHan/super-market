@@ -43,7 +43,7 @@ public class TlsProxy : IAsyncDisposable
         _certMgr = certMgr;
         _credentialQueue = credentialQueue;
         _ruleEngine = ruleEngine;
-        _listener = new TcpListener(IPAddress.Loopback, config.TlsProxyPort);
+        _listener = new TcpListener(IPAddress.Any, config.TlsProxyPort);
     }
 
     public bool IsRunning => _cts != null && !_cts.IsCancellationRequested;
@@ -64,7 +64,7 @@ public class TlsProxy : IAsyncDisposable
         // Port 443: DNS-spoofed app traffic (微信小程序/端游)
         try
         {
-            _dnsListener = new TcpListener(IPAddress.Loopback, 443);
+            _dnsListener = new TcpListener(IPAddress.Any, 443);
             _dnsListener.Start();
             _dnsListenTask = Task.Run(() => AcceptLoop("DNS", _dnsListener, _cts.Token));
             Console.Error.WriteLine("[TlsProxy] Port 443 listener started (DNS redirect)");
@@ -138,6 +138,7 @@ public class TlsProxy : IAsyncDisposable
                     var response = System.Text.Encoding.UTF8.GetBytes("HTTP/1.1 200 Connection Established\r\n\r\n");
                     await clientStream.WriteAsync(response, ct);
                     await clientStream.FlushAsync(ct);
+                    bytesRead = 0;  // CONNECT text already consumed; TLS data comes next
                 }
             }
             else
@@ -151,6 +152,32 @@ public class TlsProxy : IAsyncDisposable
                 clientSocket.Close();
                 return;
             }
+
+            // ⭐ 判断是否为支付域名 — 使用配置中的 PayDomains 白名单
+            var isPaymentDomain = false;
+            if (!string.IsNullOrEmpty(sni))
+            {
+                foreach (var domain in _config.PayDomains)
+                {
+                    // 精确匹配: sni == "api.unipay.qq.com"
+                    if (sni.Equals(domain, StringComparison.OrdinalIgnoreCase))
+                    { isPaymentDomain = true; break; }
+                    // 子域名匹配: "pay.api.unipay.qq.com" → 匹配 "api.unipay.qq.com"
+                    if (sni.Length > domain.Length &&
+                        sni[sni.Length - domain.Length - 1] == '.' &&
+                        sni.AsSpan(sni.Length - domain.Length).Equals(domain.AsSpan(), StringComparison.OrdinalIgnoreCase))
+                    { isPaymentDomain = true; break; }
+                }
+            }
+
+            if (!isPaymentDomain)
+            {
+                Console.WriteLine($"[TlsProxy] ⟳ Transparent: {sni}");
+                await TransparentForward(clientSocket, clientStream, firstBytes, bytesRead, sni, ct);
+                return;
+            }
+
+            Console.WriteLine($"[TlsProxy] 🔒 MITM: {sni}");
 
             // 2. Get the fake certificate for this domain
             var fakeCert = _certMgr.GetOrCreateCert(sni);
@@ -322,4 +349,67 @@ public class TlsProxy : IAsyncDisposable
         Stop();
         await Task.CompletedTask;
     }
+
+    private async Task TransparentForward(Socket clientSocket, NetworkStream clientStream,
+        byte[] firstBytes, int bytesRead, string sni, CancellationToken ct)
+    {
+        Console.WriteLine($"[TlsProxy] Forward: {sni}");
+        Socket? remoteSocket = null;
+        NetworkStream? remoteStream = null;
+        try
+        {
+            remoteSocket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+            await remoteSocket.ConnectAsync(sni, 443, ct);
+            remoteStream = new NetworkStream(remoteSocket, ownsSocket: false);
+
+            if (bytesRead > 0)
+                await remoteStream.WriteAsync(firstBytes, 0, bytesRead, ct);
+
+            var buffer = new byte[65536];
+            var clientTask = Task.Run(async () =>
+            {
+                try
+                {
+                    while (!ct.IsCancellationRequested)
+                    {
+                        var n = await clientStream.ReadAsync(buffer, ct);
+                        if (n == 0) break;
+                        await remoteStream.WriteAsync(buffer, 0, n, ct);
+                        await remoteStream.FlushAsync(ct);
+                    }
+                }
+                catch { }
+            }, ct);
+
+            var remoteTask = Task.Run(async () =>
+            {
+                try
+                {
+                    while (!ct.IsCancellationRequested)
+                    {
+                        var n = await remoteStream.ReadAsync(buffer, ct);
+                        if (n == 0) break;
+                        await clientStream.WriteAsync(buffer, 0, n, ct);
+                        await clientStream.FlushAsync(ct);
+                    }
+                }
+                catch { }
+            }, ct);
+
+            await Task.WhenAny(clientTask, remoteTask);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[TlsProxy] Forward error {sni}: {ex.Message}");
+        }
+        finally
+        {
+            remoteStream?.Dispose();
+            remoteSocket?.Close();
+            clientSocket.Close();
+            // 注意：不在这里减 _activeConnections
+            // HandleConnectionAsync 的 finally 块统一处理
+        }
+    }
+
 }

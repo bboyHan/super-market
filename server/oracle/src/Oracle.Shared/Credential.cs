@@ -1,5 +1,8 @@
+using System.Text.Json.Serialization;
+
 namespace Oracle.Shared;
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum CredentialType
 {
     PaymentUrl,      // weixin://wxpay/bizpayurl?pr=XXX
@@ -22,6 +25,7 @@ public class Credential
     public string OpenId { get; set; } = "";
     public string PayMethod { get; set; } = "";
     public Dictionary<string, string> Metadata { get; set; } = new();
+    public DateTime CapturedAt { get; set; } = DateTime.UtcNow;
 
     public object ToIngestPayload() => new
     {
