@@ -39,6 +39,9 @@ public class DnsSpoofer : IDisposable
         "wx.tenpay.com.",
         "tenpay.com.",
         "qpay.qq.com.",
+        "api.mch.weixin.qq.com.",
+        "pay.weixin.qq.com.",
+        "short.weixin.qq.com.",
     };
 
     // ── WinDivert P/Invoke ────────────────────────────
