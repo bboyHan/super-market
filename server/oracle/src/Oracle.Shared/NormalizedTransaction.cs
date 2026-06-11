@@ -29,6 +29,11 @@ public class NormalizedTransaction
     public int StatusCode { get; set; }
     public string ResponseBody { get; set; } = "";
 
+    /// <summary>
+    /// 原始响应体（Base64 编码），用于二进制数据（二维码图片等）
+    /// </summary>
+    public string? ResponseBodyBase64 { get; set; }
+
     // ── 快捷属性 ──
     public string Url => $"https://{Domain}{Path}";
     public string FullUrl => $"https://{Domain}{Path}{QueryString}";

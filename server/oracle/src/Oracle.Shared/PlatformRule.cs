@@ -41,6 +41,11 @@ public class FieldDefinition
 
     /// <summary>映射到 Credential 的字段</summary>
     public string OutputField { get; set; } = "value";
+
+    /// <summary>
+    /// 捕获模式：auto（默认，正则提取）| full_body（捕获整个响应体存为 Base64）
+    /// </summary>
+    public string CaptureMode { get; set; } = "auto";
 }
 
 /// <summary>
@@ -88,12 +93,15 @@ public class PlatformRule
         if (Fields == null || Fields.Count == 0)
             return Extractors;
 
-        return Fields.Select(f => new ExtractorRule
+        return Fields.Select(f =>
         {
-            Name = f.Name,
-            Source = f.Source,
-            OutputField = f.OutputField,
-            Pattern = InferPattern(f),
+            // full_body mode: capture entire response as base64
+            if (f.CaptureMode == "full_body")
+                return new ExtractorRule { Name = f.Name, Source = "response_body_raw",
+                    OutputField = f.OutputField, CredentialType = "qr_image", Pattern = "" };
+
+            return new ExtractorRule { Name = f.Name, Source = f.Source,
+                OutputField = f.OutputField, Pattern = InferPattern(f) };
         }).ToList();
     }
 
@@ -102,10 +110,16 @@ public class PlatformRule
         if (!string.IsNullOrEmpty(field.Pattern) && field.Pattern != "auto")
             return field.Pattern;
 
-        // 从示例值自动推断正则
+        // 如果来源是响应体/请求体，用字段名匹配 JSON key
+        // 字段名 "result_url" → "result_url"\s*:\s*"([^"]+)
+        if (field.Source == "response_body" || field.Source == "request_body")
+        {
+            var key = Regex.Escape(field.Name);
+            return $"\"{key}\"\\s*:\\s*\"([^\"]+)";
+        }
+
         if (string.IsNullOrEmpty(field.Example)) return ".*";
 
-        // 常见模式识别
         var ex = field.Example;
 
         if (ex.StartsWith("weixin://")) return "weixin://[^\\s\"'<>)}]+";
@@ -114,7 +128,6 @@ public class PlatformRule
         if (Regex.IsMatch(ex, @"^\d+$")) return "(\\d+)";
         if (ex.Contains("=")) return Regex.Escape(ex);
 
-        // 默认：转义后直接匹配
         return Regex.Escape(ex);
     }
 }
@@ -199,6 +212,14 @@ public class ExtractorRule
     /// </summary>
     public string? Extract(NormalizedTransaction tx)
     {
+        // response_body_raw 特殊处理：返回整个响应体的 Base64
+        if (Source.ToLower() == "response_body_raw")
+        {
+            var b64 = tx.ResponseBodyBase64;
+            if (string.IsNullOrEmpty(b64)) return null;
+            return b64;
+        }
+
         var source = Source.ToLower() switch
         {
             "request_body" => tx.RequestBody,

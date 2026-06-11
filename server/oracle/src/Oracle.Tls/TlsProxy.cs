@@ -256,28 +256,22 @@ public class TlsProxy : IAsyncDisposable
                     // [DEBUG] 取消注释可查看实时请求流量
                     // Console.Error.WriteLine($"[DBG] {System.Text.Encoding.UTF8.GetString(buffer, 0, Math.Min(n, 200))}");
 
-                    // Capture first request (method, path, body)
-                    if (!requestCapture.Captured && n > 0)
+                    // Detect HTTP request line (supports keep-alive multi-request)
+                    var line = System.Text.Encoding.UTF8.GetString(buffer, 0, Math.Min(n, 4000));
+                    if ((line.StartsWith("GET ") || line.StartsWith("POST ") ||
+                         line.StartsWith("PUT ") || line.StartsWith("DELETE ")) &&
+                        line.Contains(" HTTP/"))
                     {
-                        var text = System.Text.Encoding.UTF8.GetString(buffer, 0, Math.Min(n, 4000));
-                        var parts = text.Split(' ');
+                        var parts = line.Split(' ');
                         if (parts.Length >= 2)
                         {
                             requestCapture.Method = parts[0];
                             var pathQuery = parts[1];
                             var qIdx = pathQuery.IndexOf('?');
-                            if (qIdx >= 0)
-                            {
-                                requestCapture.Path = pathQuery[..qIdx];
-                                requestCapture.Body = text.Contains("\r\n\r\n") 
-                                    ? text[(text.IndexOf("\r\n\r\n") + 4)..] 
-                                    : "";
-
-                            }
-                            else
-                            {
-                                requestCapture.Path = pathQuery;
-                            }
+                            requestCapture.Path = qIdx >= 0 ? pathQuery[..qIdx] : pathQuery;
+                            requestCapture.Body = line.Contains("\r\n\r\n")
+                                ? line[(line.IndexOf("\r\n\r\n") + 4)..]
+                                : "";
                             requestCapture.Captured = true;
                         }
                     }
@@ -321,6 +315,7 @@ public class TlsProxy : IAsyncDisposable
                                 StatusCode = 200,
                                 RequestBody = requestCapture.Body,
                                 ResponseBody = fullResponse,
+                                ResponseBodyBase64 = Convert.ToBase64String(responseBuffer.ToArray()),
                             };
 
                             var credentials = _ruleEngine.Process(tx);
