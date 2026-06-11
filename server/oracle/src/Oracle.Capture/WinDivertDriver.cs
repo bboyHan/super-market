@@ -4,9 +4,9 @@ using System.Runtime.InteropServices;
 namespace Oracle.Capture;
 
 /// <summary>
-/// WinDivert kernel driver — DIVERT mode.
-/// ALL outbound TCP/443 traffic → redirected to TLS proxy.
-/// The proxy decides: payment → MITM, non-payment → transparent relay.
+/// WinDivertDriver — DIVERT mode, SYN interception.
+/// Intercepts TCP SYN to port 443, redirects ALL to TlsProxy.
+/// Proxy decides: payment → MITM, non-payment → transparent forward.
 /// </summary>
 public class WinDivertDriver : ICaptureDriver
 {
@@ -17,30 +17,42 @@ public class WinDivertDriver : ICaptureDriver
     private WinDivertAddress _addr;
     private long _directPacketCount;
 
+    public bool DivertEnabled { get; set; } = true;
+    public int ProxyPort { get; set; } = 18802;
     public long DirectPacketCount => Interlocked.Read(ref _directPacketCount);
     public event Action<CapturedPacket>? OnPacketCaptured;
 
+    // Paydomain SNI keywords
+    private static readonly (string keyword, string label)[] PayDomains = {
+        ("pay.qq.com", "pay.qq"), ("unipay.qq.com", "unipay"), ("storeapi", "store"),
+        ("pagedoo", "pagedoo"), ("tenpay.com", "tenpay"), ("weixin.qq.com", "weixin"),
+        ("midas.gtimg.cn", "midas"), ("vm.gtimg.cn", "vm"), ("qpay.qq.com", "qpay"),
+        ("mp.weixin.qq.com", "mp.wx"),
+    };
+
+    private static bool IsPaySni(string sni)
+    {
+        if (sni == null) return false;
+        foreach (var (kw, _) in PayDomains)
+            if (sni.Contains(kw, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     private static extern nint WinDivertOpen(string filter, int layer, short priority, long flags);
-
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     private static extern bool WinDivertClose(nint handle);
-
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     private static extern bool WinDivertSetParam(nint handle, int param, long value);
-
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     private static extern bool WinDivertRecv(nint handle, byte[] pPacket, int packetLen, out int recvLen, ref WinDivertAddress pAddr);
-
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     private static extern bool WinDivertSend(nint handle, byte[] pPacket, int packetLen, out int sendLen, ref WinDivertAddress pAddr);
-
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
     private static extern ulong WinDivertHelperCalcChecksums(byte[] pPacket, int packetLen, ref WinDivertAddress pAddr, ulong flags);
 
     private const int WINDIVERT_PARAM_QUEUE_LEN = 0;
     private const int WINDIVERT_LAYER_NETWORK = 0;
-    private const uint FLAG_IMPOSTOR = 0x80000;  // Bit 19
 
     [StructLayout(LayoutKind.Sequential)]
     private struct WinDivertAddress
@@ -57,21 +69,20 @@ public class WinDivertDriver : ICaptureDriver
 
     public void Open(int queueLen = 8192)
     {
-        // SNIFF mode: monitor only, no interception.
-        var filter = "outbound and tcp.DstPort == 443 and tcp.PayloadLength > 0";
-        _handle = WinDivertOpen(filter, WINDIVERT_LAYER_NETWORK, 0, 0x0001); /* SNIFF */
-
+        // SYN interception filter: catch new TCP connections to port 443
+        var filter = "outbound and tcp.DstPort == 443 and tcp.Syn and not tcp.Ack";
+        var flags = DivertEnabled ? 0L : 0x0001L;
+        _handle = WinDivertOpen(filter, WINDIVERT_LAYER_NETWORK, 0, flags);
         if (_handle == nint.Zero || _handle == (nint)(-1))
         {
             var error = Marshal.GetLastWin32Error();
-            throw new InvalidOperationException(
-                $"WinDivert open failed (error {error}). Requires Administrator.");
+            throw new InvalidOperationException($"WinDivert open failed (error {error})");
         }
-        WinDivertSetParam(_handle, WINDIVERT_PARAM_QUEUE_LEN, 8192);
-
+        WinDivertSetParam(_handle, WINDIVERT_PARAM_QUEUE_LEN, queueLen);
+        Console.WriteLine($"[WinDivert] DIVERT mode: intercepting TCP/443 SYN packets");
+        Console.WriteLine($"[WinDivert] All HTTPS traffic -> 127.0.0.1:{ProxyPort}");
         var t = new Thread(CaptureThread) { Name = "WinDivert", IsBackground = true };
         t.Start();
-        Console.WriteLine("[WinDivert] SNIFF mode active — monitoring TCP/443");
     }
 
     public void Close()
@@ -86,6 +97,7 @@ public class WinDivertDriver : ICaptureDriver
 
     private void CaptureThread()
     {
+        var proxyIp = BitConverter.ToUInt32(new byte[] { 127, 0, 0, 1 });
         try
         {
             while (!_disposed)
@@ -96,23 +108,14 @@ public class WinDivertDriver : ICaptureDriver
                     continue;
                 }
                 if (recvLen <= 0) continue;
-
                 Interlocked.Increment(ref _directPacketCount);
 
-                // SNIFF mode: just monitor, no modification.
-                var sni = TlsHelper.ExtractSni(new ReadOnlySpan<byte>(_packetBuffer, 0, recvLen));
-                if (sni != null)
-                    Console.WriteLine($"[SNI] {sni}");
-
-                var packet = new CapturedPacket
-                {
-                    RawData = _packetBuffer[..recvLen],
-                    SrcAddr = new IPAddress(BitConverter.GetBytes(_addr.SrcAddr)),
-                    DstAddr = new IPAddress(BitConverter.GetBytes(_addr.DstAddr)),
-                    SrcPort = _addr.SrcPort,
-                    DstPort = _addr.DstPort,
-                };
-                OnPacketCaptured?.Invoke(packet);
+                // We only get SYN packets here. Redirect ALL to TlsProxy.
+                // The proxy will check SNI and decide: MITM or transparent forward.
+                _addr.DstAddr = proxyIp;
+                _addr.DstPort = (ushort)ProxyPort;
+                WinDivertHelperCalcChecksums(_packetBuffer, recvLen, ref _addr, 0);
+                WinDivertSend(_handle, _packetBuffer, recvLen, out _, ref _addr);
             }
         }
         catch (Exception ex)
