@@ -68,6 +68,9 @@ var httpParser = new HttpParser();
 var extractor = new CredentialExtractor(httpParser);
 var ruleEngine = new Oracle.Extractor.RuleEngine();
 
+// Traffic buffer for dashboard inspection
+var trafficBuffer = new TrafficBuffer();
+
 // Protocol Registry
 var protocolRegistry = new Oracle.Http.ProtocolRegistry();
 protocolRegistry.AddParser(new Oracle.Http.Http11Parser());
@@ -84,7 +87,7 @@ channelMgr.Register(winDivertCh);
 var dnsSpoofCh = new DnsSpoofChannel();
 channelMgr.Register(dnsSpoofCh);
 
-var tlsProxyCh = new TlsProxyChannel(config, certMgr, credQueue, ruleEngine, protocolRegistry);
+var tlsProxyCh = new TlsProxyChannel(config, certMgr, credQueue, ruleEngine, protocolRegistry, trafficBuffer);
 channelMgr.Register(tlsProxyCh);
 
 // Legacy: CaptureService wrapping WinDivert driver for packet stats
@@ -227,6 +230,12 @@ app.MapPost("/inject", (Credential cred) =>
 });
 
 // Recent captured data (for Dashboard)
+// Traffic inspector (decrypted HTTP traffic)
+app.MapGet("/traffic", () =>
+{
+    return Results.Ok(new { items = trafficBuffer.GetAll() });
+});
+
 app.MapGet("/data", () =>
 {
     var recent = credQueue.GetRecentCredentials();

@@ -129,36 +129,34 @@ function hookCertGetChain() {
 // ── 主函数 ────────────────────────────────────
 
 function main() {
-    log('Frida script loaded - Waiting for WeChat...');
+    log('Frida script loaded - Attaching to WeChat...');
 
-    // Wait for schannel.dll to be loaded
-    const moduleName = TARGET_MODULE;
-
-    // Check if already loaded
-    if (Process.findModuleByName(moduleName)) {
-        log(`${moduleName} already loaded, installing hooks...`);
+    // Check if schannel.dll is loaded
+    if (Process.findModuleByName(TARGET_MODULE)) {
+        log(`${TARGET_MODULE} already loaded, installing hooks...`);
         hookCertVerify();
         hookCertGetChain();
     } else {
-        // Wait for module load
-        log(`Waiting for ${moduleName} to load...`);
-        Interceptor.attach(Module.findExportByName('kernel32.dll', 'LoadLibraryExW'), {
-            onEnter: function(args) {
-                const path = args[0].readWideString();
-                if (path && path.toLowerCase().includes('schannel')) {
-                    log(`schannel.dll loading: ${path}`);
-                }
-            }
-        });
+        log(`${TARGET_MODULE} not yet loaded - hooks will activate when loaded`);
+    }
 
-        // Retry hooking after a delay
-        setTimeout(() => {
-            if (hookCertVerify()) {
-                hookCertGetChain();
-            } else {
-                log('[!] Failed to hook - check if WeChat.exe is running');
-            }
-        }, 5000);
+    // Try hooks immediately (they'll work if module is loaded)
+    var hooked = hookCertVerify();
+    hookCertGetChain();
+
+    if (!hooked) {
+        log('[!] CertVerify not available yet - retrying in 3 seconds...');
+        // Frida-compatible delay using NativeFunction
+        var sleep = new NativeFunction(
+            Module.findExportByName('kernel32.dll', 'Sleep'),
+            'void', ['uint32']
+        );
+        sleep(3000);
+        if (!hookCertVerify()) {
+            log('[!] Still not available, schannel.dll may not be used by this process');
+        } else {
+            hookCertGetChain();
+        }
     }
 }
 

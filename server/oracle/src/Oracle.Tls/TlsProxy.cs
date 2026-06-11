@@ -27,6 +27,7 @@ public class TlsProxy : IAsyncDisposable
     private readonly CredentialQueue _credentialQueue;
     private readonly Oracle.Extractor.RuleEngine? _ruleEngine;
     private readonly Oracle.Http.ProtocolRegistry? _protocolRegistry;
+    private readonly Oracle.Shared.TrafficBuffer? _trafficBuffer;
     private readonly TcpListener _listener;
     private TcpListener? _dnsListener;
     private Task? _dnsListenTask;
@@ -39,13 +40,15 @@ public class TlsProxy : IAsyncDisposable
     public TlsProxy(OracleConfig config, CertificateManager certMgr,
                     CredentialQueue credentialQueue,
                     Oracle.Extractor.RuleEngine? ruleEngine = null,
-                    Oracle.Http.ProtocolRegistry? protocolRegistry = null)
+                    Oracle.Http.ProtocolRegistry? protocolRegistry = null,
+            Oracle.Shared.TrafficBuffer? trafficBuffer = null)
     {
         _config = config;
         _certMgr = certMgr;
         _credentialQueue = credentialQueue;
         _ruleEngine = ruleEngine;
             _protocolRegistry = protocolRegistry;
+            _trafficBuffer = trafficBuffer;
         _listener = new TcpListener(IPAddress.Any, config.TlsProxyPort);
     }
 
@@ -187,8 +190,7 @@ public class TlsProxy : IAsyncDisposable
             var fakeCert = _certMgr.GetOrCreateCert(sni);
 
             // 3. Connect to remote server
-            var remoteSocket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-            await remoteSocket.ConnectAsync(sni, 443, ct);
+            var remoteSocket = await Oracle.Shared.DnsResolver.ConnectAsync(sni, 443, ct);
             remoteStream = new NetworkStream(remoteSocket, ownsSocket: false);
 
             // 4. TLS handshake with client (server mode) - using SChannel via SslStream
@@ -306,19 +308,27 @@ public class TlsProxy : IAsyncDisposable
 
                         // Try to extract credentials using the RuleEngine
                         var responseStr = System.Text.Encoding.UTF8.GetString(buffer, 0, n);
+
+                        var rawResp = System.Text.Encoding.UTF8.GetString(responseBuffer.ToArray());
+
+                        // Record ALL decrypted traffic (Fiddler-style) regardless of rules
+                        if (requestCapture.Captured)
+                        {
+                            _trafficBuffer?.Record(sni, requestCapture.Method, requestCapture.Path,
+                                requestCapture.Body, ParseHttpStatus(rawResp),
+                                new Dictionary<string, string>(), rawResp);
+                        }
+
                         if (_ruleEngine != null && requestCapture.Captured)
                         {
-                            var fullResponse = System.Text.Encoding.UTF8.GetString(
-                                responseBuffer.ToArray());
-
                             var tx = new NormalizedTransaction
                             {
                                 Domain = sni,
                                 Method = requestCapture.Method,
                                 Path = requestCapture.Path,
-                                StatusCode = ParseHttpStatus(fullResponse),
+                                StatusCode = ParseHttpStatus(rawResp),
                                 RequestBody = requestCapture.Body,
-                                ResponseBody = fullResponse,
+                                ResponseBody = rawResp,
                                 ResponseBodyBase64 = Convert.ToBase64String(responseBuffer.ToArray()),
                             };
 
@@ -382,8 +392,7 @@ public class TlsProxy : IAsyncDisposable
         NetworkStream? remoteStream = null;
         try
         {
-            remoteSocket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-            await remoteSocket.ConnectAsync(sni, 443, ct);
+            remoteSocket = await Oracle.Shared.DnsResolver.ConnectAsync(sni, 443, ct);
             remoteStream = new NetworkStream(remoteSocket, ownsSocket: false);
 
             if (bytesRead > 0)

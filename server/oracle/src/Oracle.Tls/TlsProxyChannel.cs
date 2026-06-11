@@ -32,9 +32,10 @@ public class TlsProxyChannel : ICaptureChannel
 
     public TlsProxyChannel(OracleConfig config, CertificateManager certMgr,
         CredentialQueue credentialQueue, Oracle.Extractor.RuleEngine? ruleEngine,
-        Oracle.Http.ProtocolRegistry? protocolRegistry = null)
+        Oracle.Http.ProtocolRegistry? protocolRegistry = null,
+            Oracle.Shared.TrafficBuffer? trafficBuffer = null)
     {
-        _proxy = new TlsProxy(config, certMgr, credentialQueue, ruleEngine, protocolRegistry);
+        _proxy = new TlsProxy(config, certMgr, credentialQueue, ruleEngine, protocolRegistry, trafficBuffer);
     }
 
     public Task<bool> InitializeAsync()
