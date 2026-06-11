@@ -68,6 +68,12 @@ var httpParser = new HttpParser();
 var extractor = new CredentialExtractor(httpParser);
 var ruleEngine = new Oracle.Extractor.RuleEngine();
 
+// Protocol Registry
+var protocolRegistry = new Oracle.Http.ProtocolRegistry();
+protocolRegistry.AddParser(new Oracle.Http.Http11Parser());
+protocolRegistry.AddParser(new Oracle.Http.Http2Parser());
+Console.WriteLine($"[Oracle] Protocol parsers: {protocolRegistry.Count} ({string.Join(", ", protocolRegistry.Names)})");
+
 // Channel Manager
 
 var channelMgr = new ChannelManager();
@@ -78,7 +84,7 @@ channelMgr.Register(winDivertCh);
 var dnsSpoofCh = new DnsSpoofChannel();
 channelMgr.Register(dnsSpoofCh);
 
-var tlsProxyCh = new TlsProxyChannel(config, certMgr, credQueue, ruleEngine);
+var tlsProxyCh = new TlsProxyChannel(config, certMgr, credQueue, ruleEngine, protocolRegistry);
 channelMgr.Register(tlsProxyCh);
 
 // Legacy: CaptureService wrapping WinDivert driver for packet stats

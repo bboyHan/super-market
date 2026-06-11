@@ -26,6 +26,7 @@ public class TlsProxy : IAsyncDisposable
     private readonly CertificateManager _certMgr;
     private readonly CredentialQueue _credentialQueue;
     private readonly Oracle.Extractor.RuleEngine? _ruleEngine;
+    private readonly Oracle.Http.ProtocolRegistry? _protocolRegistry;
     private readonly TcpListener _listener;
     private TcpListener? _dnsListener;
     private Task? _dnsListenTask;
@@ -37,12 +38,14 @@ public class TlsProxy : IAsyncDisposable
 
     public TlsProxy(OracleConfig config, CertificateManager certMgr,
                     CredentialQueue credentialQueue,
-                    Oracle.Extractor.RuleEngine? ruleEngine = null)
+                    Oracle.Extractor.RuleEngine? ruleEngine = null,
+                    Oracle.Http.ProtocolRegistry? protocolRegistry = null)
     {
         _config = config;
         _certMgr = certMgr;
         _credentialQueue = credentialQueue;
         _ruleEngine = ruleEngine;
+            _protocolRegistry = protocolRegistry;
         _listener = new TcpListener(IPAddress.Any, config.TlsProxyPort);
     }
 
