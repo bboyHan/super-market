@@ -57,7 +57,8 @@ tr:hover td { background:#161b22; }
 <div class="tabs">
   <div class="tab active" onclick="switchTab('overview')">概览</div>
   <div class="tab" onclick="switchTab('data')">采集数据</div>
-  <div class="tab" onclick="switchTab('config')">配置</div>
+  <div class="tab" onclick="switchTab('rules')">采集目标</div>
+  <div class="tab" onclick="switchTab('config')">设置</div>
 </div>
 
 <div id="tab-overview" class="panel active">
@@ -89,6 +90,15 @@ tr:hover td { background:#161b22; }
     <tbody id="dataBody"></tbody>
   </table>
   <div class="empty" id="dataEmpty">暂无数据，启动采集后自动出现</div>
+</div>
+
+<div id="tab-rules" class="panel">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <h3 style="font-size:14px;color:#8b949e;">采集目标</h3>
+    <button class="primary" onclick="showAddRule()" style="padding:6px 14px;border:1px solid #238636;border-radius:6px;font-size:13px;cursor:pointer;background:#238636;color:#fff;">+ 新建目标</button>
+  </div>
+  <div id="rulesList"></div>
+  <div class="empty" id="rulesEmpty">暂无采集目标，点击上方按钮创建</div>
 </div>
 
 <div id="tab-config" class="panel">
@@ -210,6 +220,123 @@ async function refresh() {
 refresh();
 log('面板已加载，自动刷新中...');
 setInterval(refresh, 3000);
+
+// ── Rule Management ──
+
+async function loadRules() {
+  try {
+    const r = await fetchJSON('/rules');
+    const list = document.getElementById('rulesList');
+    const empty = document.getElementById('rulesEmpty');
+    list.innerHTML = '';
+    if (r.rules && r.rules.length > 0) {
+      empty.style.display = 'none';
+      r.rules.forEach(rule => {
+        const fields = rule.field_count > 0 ? '/'+rule.field_count+'字段' : rule.extractor_count > 0 ? '/'+rule.extractor_count+'提取' : '';
+        const appLabel = {browser:'网页',desktop:'PC',emulator:'手游'}[rule.app_type] || rule.app_type;
+        list.innerHTML += '<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px;margin-bottom:8px;">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;">'+
+            '<div><span style="font-weight:600;">'+(rule.enabled?'[ON] ':'[OFF] ')+rule.name+'</span>'+
+            '<span style="font-size:12px;color:#8b949e;margin-left:8px;">'+appLabel+' '+fields+'</span></div>'+
+            '<div style="font-size:12px;color:#8b949e;">'+(rule.total_captured||0)+'条</div>'+
+          '</div>'+
+          '<div style="font-size:12px;color:#8b949e;margin-top:4px;">'+(rule.domains.join(', ')||'-')+'</div>'+
+          '<div style="font-size:12px;margin-top:6px;display:flex;gap:8px;">'+
+            '<span style="color:#58a6ff;cursor:pointer;" onclick="deleteRule(\''+rule.id+'\')">删除</span>'+
+          '</div></div>';
+      });
+    } else {
+      empty.style.display = 'block';
+    }
+  } catch(e) { log('Rules load error: '+e.message, 'error'); }
+}
+
+async function deleteRule(id) {
+  if (!confirm('Delete this rule?')) return;
+  try {
+    await fetch('/rules/'+id, { method:'DELETE' });
+    await loadRules();
+  } catch(e) { log('Delete failed: '+e.message, 'error'); }
+}
+
+function showAddRule() {
+  document.getElementById('ruleForm').style.display = 'block';
+}
+
+function hideRuleForm() {
+  document.getElementById('ruleForm').style.display = 'none';
+}
+
+function onAppTypeChange() {
+  const t = document.getElementById('ruleAppType').value;
+  document.getElementById('ruleDomainGroup').style.display = t==='emulator'?'none':'block';
+  document.getElementById('ruleProcessGroup').style.display = t==='desktop'?'block':'none';
+}
+
+function addFieldRow() {
+  const c = document.getElementById('fieldsContainer');
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;';
+  row.innerHTML = '<input placeholder="字段名" style="flex:2;padding:6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;">'+
+    '<select style="flex:1;padding:6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;"><option value="response_body">响应体</option><option value="request_body">请求体</option></select>'+
+    '<input placeholder="示例值" style="flex:2;padding:6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;">'+
+    '<button onclick="this.parentElement.remove()" style="padding:6px 10px;background:#21262d;border:1px solid #30363d;border-radius:4px;color:#f85149;cursor:pointer;">x</button>';
+  c.appendChild(row);
+}
+
+async function saveRule() {
+  const name = document.getElementById('ruleName').value.trim();
+  if (!name) { alert('请输入规则名称'); return; }
+
+  const appType = document.getElementById('ruleAppType').value;
+  const domain = document.getElementById('ruleDomain').value.trim();
+  const process = document.getElementById('ruleProcess').value.trim();
+  const path = document.getElementById('rulePath').value.trim();
+
+  const fields = [];
+  document.querySelectorAll('#fieldsContainer > div').forEach(row => {
+    const inputs = row.querySelectorAll('input, select');
+    if (inputs.length >= 3) {
+      const fname = inputs[0].value.trim();
+      const source = inputs[1].value;
+      const example = inputs[2].value.trim();
+      if (fname) fields.push({ name: fname, source: source, example: example });
+    }
+  });
+
+  const matchers = [];
+  if (domain) matchers.push({ field: 'domain', operator: 'contains', value: domain });
+  if (path) matchers.push({ field: 'path', operator: 'contains', value: path });
+
+  const rule = {
+    name: name,
+    description: name,
+    enabled: true,
+    app: { type: appType, domains: domain ? [domain] : [], processes: process ? [process] : [] },
+    matchers: matchers,
+    fields: fields.length > 0 ? fields : null,
+    channels: ['winDivert', 'dnsSpoof', 'tlsProxy'],
+  };
+
+  try {
+    await fetch('/rules', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(rule) });
+    hideRuleForm();
+    document.getElementById('ruleName').value = '';
+    document.getElementById('ruleDomain').value = '';
+    document.getElementById('ruleProcess').value = '';
+    document.getElementById('rulePath').value = '';
+    document.getElementById('fieldsContainer').innerHTML = '';
+    addFieldRow();
+    await loadRules();
+    log('Rule created: ' + name, 'info');
+  } catch(e) { log('Save failed: ' + e.message, 'error'); }
+}
+
+const _origRefresh = refresh;
+refresh = async function() {
+  await _origRefresh();
+  await loadRules();
+};
 </script>
 </body>
 </html>

@@ -257,6 +257,76 @@ app.MapGet("/data", () =>
     });
 });
 
+// ── Rule Management API ─────────────────────────
+
+app.MapGet("/rules", () =>
+{
+    var rules = ruleEngine.GetAllRules();
+    return Results.Ok(new
+    {
+        count = rules.Count,
+        rules = rules.Select(r => new
+        {
+            id = r.Id,
+            name = r.Name,
+            description = r.Description,
+            enabled = r.Enabled,
+            priority = r.Priority,
+            app_type = r.App?.Type ?? "browser",
+            domains = r.App?.Domains ?? new List<string>(),
+            processes = r.App?.Processes ?? new List<string>(),
+            matcher_count = r.Matchers.Count,
+            extractor_count = r.Extractors.Count,
+            field_count = r.Fields?.Count ?? 0,
+            total_captured = r.TotalCaptured,
+            last_matched = r.LastMatchedAt,
+            created_at = r.CreatedAt,
+        }).ToList()
+    });
+});
+
+app.MapGet("/rules/{id}", (string id) =>
+{
+    var rules = ruleEngine.GetAllRules();
+    var rule = rules.FirstOrDefault(r => r.Id == id || r.Name == id);
+    if (rule == null) return Results.NotFound(new { error = "Rule not found" });
+    return Results.Ok(rule);
+});
+
+app.MapPost("/rules", (PlatformRule rule) =>
+{
+    try
+    {
+        rule.Enabled = true;
+        rule.Priority = rule.Priority == 0 ? 100 : rule.Priority;
+        rule.CreatedAt = DateTime.UtcNow;
+        ruleEngine.SaveRule(rule);
+        return Results.Ok(new { status = "created", id = rule.Id ?? rule.Name });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
+app.MapPut("/rules/{id}", (string id, PlatformRule updated) =>
+{
+    var rules = ruleEngine.GetAllRules();
+    var existing = rules.FirstOrDefault(r => r.Id == id || r.Name == id);
+    if (existing == null) return Results.NotFound(new { error = "Rule not found" });
+    updated.Id = id;
+    updated.CreatedAt = existing.CreatedAt;
+    ruleEngine.SaveRule(updated);
+    return Results.Ok(new { status = "updated", id });
+});
+
+app.MapDelete("/rules/{id}", (string id) =>
+{
+    var deleted = ruleEngine.DeleteRule(id);
+    if (!deleted) return Results.NotFound(new { error = "Rule not found" });
+    return Results.Ok(new { status = "deleted", id });
+});
+
 // ── Help API ────────────────────────────────────────
 
 app.MapGet("/help", () =>

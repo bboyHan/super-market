@@ -50,6 +50,54 @@ public class RuleEngine : IDisposable
     }
 
     /// <summary>
+    /// 获取所有规则（带 ID 和统计）
+    /// </summary>
+    public List<PlatformRule> GetAllRules()
+    {
+        lock (_lock) return new List<PlatformRule>(_rules);
+    }
+
+    /// <summary>
+    /// 保存规则（创建或更新）
+    /// </summary>
+    public void SaveRule(PlatformRule rule)
+    {
+        var id = rule.Id ?? rule.Name;
+        if (string.IsNullOrEmpty(id))
+            throw new ArgumentException("Rule must have a Name or Id");
+
+        rule.Id = id;
+        var filePath = Path.Combine(_rulesDir, $"{id}.json");
+
+        // 编译 Fields 到 Extractors（保持兼容）
+        if (rule.Fields != null && rule.Fields.Count > 0)
+        {
+            rule.Extractors = rule.CompileFields();
+        }
+
+        var options = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        };
+
+        var json = JsonSerializer.Serialize(rule, options);
+        File.WriteAllText(filePath, json);
+        // LoadRules() 会通过 FileSystemWatcher 自动触发
+    }
+
+    /// <summary>
+    /// 删除规则
+    /// </summary>
+    public bool DeleteRule(string id)
+    {
+        var filePath = Path.Combine(_rulesDir, $"{id}.json");
+        if (!File.Exists(filePath)) return false;
+        File.Delete(filePath);
+        return true;
+    }
+
+    /// <summary>
     /// 处理一个标准化事务，返回匹配的凭证列表。
     /// </summary>
     public List<Credential> Process(NormalizedTransaction tx)
@@ -69,7 +117,15 @@ public class RuleEngine : IDisposable
 
             if (!matched) continue;
 
-            // 2. 提取：执行所有 extractor
+            // 2. 确定使用的提取器（优先用编译后的 Fields）
+            var extractors = rule.Extractors;
+            if ((extractors == null || extractors.Count == 0) && rule.Fields?.Count > 0)
+            {
+                extractors = rule.CompileFields();
+            }
+            if (extractors == null || extractors.Count == 0) continue;
+
+            // 3. 提取
             var cred = new Credential
             {
                 Type = CredentialType.PaymentUrl,
@@ -83,7 +139,7 @@ public class RuleEngine : IDisposable
                 }
             };
 
-            foreach (var ext in rule.Extractors)
+            foreach (var ext in extractors)
             {
                 var value = ext.Extract(tx);
                 if (value == null) continue;
@@ -146,6 +202,9 @@ public class RuleEngine : IDisposable
                     var rule = JsonSerializer.Deserialize<PlatformRule>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                     if (rule != null && !string.IsNullOrEmpty(rule.Name))
                     {
+                        // 设置 Id 为文件名（不含扩展名）
+                        if (rule.Id == null)
+                            rule.Id = Path.GetFileNameWithoutExtension(file);
                         loaded.Add(rule);
                     }
                 }
