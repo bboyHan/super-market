@@ -13,6 +13,7 @@ dist/
 # Hermes
 .hermes/
 server/oracle/publish/
+server/oracle/publish_*/
 server/oracle/src/**/bin/
 server/oracle/src/**/obj/
 server/oracle/**/*.user
