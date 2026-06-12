@@ -82,7 +82,7 @@ public class CertificateManager : IDisposable
 
         var cert = certRequest.Create(
             _rootCa,
-            now,
+            now.AddDays(-1),
             now.AddHours(_config.CertValidHours),
             serial);
 

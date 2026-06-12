@@ -36,6 +36,8 @@ public class OracleConfig
         "pagedoo.pay.qq.com",
         "storeapi.pay.qq.com",
         "wx.tenpay.com",
+        "myun.tenpay.com",
+        "jspay.qq.com",
         "tenpay.com",
         "api.mch.weixin.qq.com",
         "pay.weixin.qq.com",

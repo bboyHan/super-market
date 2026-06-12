@@ -26,7 +26,9 @@ public class WinDivertDriver : ICaptureDriver
     private static readonly (string keyword, string label)[] PayDomains = {
         ("pay.qq.com", "pay.qq"), ("unipay.qq.com", "unipay"), ("storeapi", "store"),
         ("pagedoo", "pagedoo"), ("tenpay.com", "tenpay"), ("weixin.qq.com", "weixin"),
-        ("midas.gtimg.cn", "midas"), ("vm.gtimg.cn", "vm"), ("qpay.qq.com", "qpay"),
+        ("midas.gtimg.cn", "midas"), ("vm.gtimg.cn", "vm"),
+        ("jspay.qq.com", "jspay"), ("myun.tenpay.com", "myun"),
+        ("qpay.qq.com", "qpay"),
         ("mp.weixin.qq.com", "mp.wx"),
     };
 
