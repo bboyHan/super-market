@@ -20,6 +20,7 @@ server/oracle/**/*.user
 **/bin/
 **/obj/
 web/.npm-cache/
+tools/agent-terminal/src/.npm-cache/
 server/logs/
 .claude/
 traffic*.json
