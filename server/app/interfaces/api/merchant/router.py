@@ -756,6 +756,63 @@ async def daily_stats_trend(
     } for r in rows]}
 
 
+# ── Rankings (近7日排行) ──────────────────────────────────
+
+
+@router.get("/rankings/agents")
+async def get_agent_ranking(
+    days: int = 7, limit: int = 10,
+    sid: int = Depends(_get_supplier_id),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """代理商排行 — 按近 N 日交易额降序排列。"""
+    rows = await session.execute(
+        text("""
+            SELECT a.id, a.name AS agent_name,
+                   COUNT(*) AS total_orders,
+                   COALESCE(SUM(o.amount), 0) AS total_amount,
+                   COUNT(*) FILTER (WHERE o.status = 'SUCCESS') AS success_orders
+            FROM orders o
+            JOIN agents a ON o.agent_id = a.id
+            WHERE o.supplier_id = :sid
+              AND o.created_at >= CURRENT_DATE - CAST(:d AS INTERVAL)
+            GROUP BY a.id, a.name
+            ORDER BY total_amount DESC
+            LIMIT :lim
+        """).bindparams(sid=sid, d=f"{days} days", lim=limit))
+    return {"code": 0, "data": [{
+        "agent_id": r[0], "agent_name": r[1],
+        "total_orders": r[2], "total_amount": r[3],
+        "success_orders": r[4],
+    } for r in rows]}
+
+
+@router.get("/rankings/products")
+async def get_product_ranking(
+    days: int = 7, limit: int = 10,
+    sid: int = Depends(_get_supplier_id),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """货品排行 — 按近 N 日销量降序排列。"""
+    rows = await session.execute(
+        text("""
+            SELECT p.id, p.name, p.category,
+                   COUNT(*) AS total_orders,
+                   COALESCE(SUM(o.amount), 0) AS total_amount
+            FROM orders o
+            JOIN products p ON o.product_id = p.id
+            WHERE o.supplier_id = :sid
+              AND o.created_at >= CURRENT_DATE - CAST(:d AS INTERVAL)
+            GROUP BY p.id, p.name, p.category
+            ORDER BY total_orders DESC
+            LIMIT :lim
+        """).bindparams(sid=sid, d=f"{days} days", lim=limit))
+    return {"code": 0, "data": [{
+        "product_id": r[0], "product_name": r[1], "category": r[2],
+        "total_orders": r[3], "total_amount": r[4],
+    } for r in rows]}
+
+
 @router.post("/daily-stats/refresh")
 async def daily_stats_refresh(
     sid: int = Depends(_get_supplier_id),

@@ -596,6 +596,64 @@ async def sim_trigger_callback(
     return {"code": 0, "message": "回调已触发（模拟）"}
 
 
+@router.post("/orders/{order_no}/force-complete")
+async def force_complete_order(
+    order_no: str,
+    remark: str = "",
+    session: AsyncSession = Depends(get_db_session),
+    user: dict = Depends(_require_admin),
+):
+    """强制完成异常订单。
+
+    使用场景：API支付商已线下付款，但订单因系统异常卡在 PENDING/DELIVERING 状态。
+    管理员核实后调用此接口强制置为 SUCCESS 并触发回调通知。
+
+    安全约束：
+      - 仅管理员可操作
+      - 仅 PENDING/DELIVERING 状态的订单可操作
+      - 记录操作日志
+    """
+    row = await session.execute(
+        text("SELECT id, status, callback_url, callback_status, supplier_id, agent_id, "
+             "amount, product_id, api_payer_id, client_order_id, order_no "
+             "FROM orders WHERE order_no=:on FOR UPDATE")
+        .bindparams(on=order_no))
+    o = row.first()
+    if not o:
+        raise HTTPException(status_code=404, detail="订单不存在")
+
+    valid_statuses = ('PENDING', 'DELIVERING')
+    if o[1] not in valid_statuses:
+        raise HTTPException(status_code=400,
+            detail=f"订单状态 {o[1]} 不可强制完成，仅 {', '.join(valid_statuses)} 状态可操作")
+
+    admin_id = user.get("ref_id", 0) or user.get("sub", 0)
+    admin_username = user.get("username", "admin")
+
+    # Update order status
+    await session.execute(
+        text("UPDATE orders SET status='SUCCESS', paid_at=NOW(), updated_at=NOW(), "
+             "remark=COALESCE(remark, '') || :rm WHERE order_no=:on")
+        .bindparams(on=order_no, rm=f" | 管理员强制完成: {remark} (by {admin_username})"))
+
+    # Log the operation
+    await session.execute(
+        text("INSERT INTO login_logs (user_id, username, ip_address, user_agent, success, fail_reason) "
+             "VALUES (:uid, :un, '127.0.0.1', 'force-complete', TRUE, :rm)")
+        .bindparams(uid=admin_id, un=admin_username, rm=f"强制完成订单 {order_no}: {remark}"))
+
+    await session.commit()
+
+    # Trigger callback (async, non-blocking)
+    from app.infrastructure.callback.worker import enqueue_callback
+    async with async_session_factory() as cb_session:
+        await enqueue_callback(order_no, cb_session)
+        await cb_session.commit()
+
+    return {"code": 0, "data": {"order_no": order_no, "status": "SUCCESS"},
+            "message": f"订单 {order_no} 已强制完成，回调已触发"}
+
+
 # ── USDT Deposit Review ───────────────────────────────────────
 
 @router.get("/deposit-addresses")
