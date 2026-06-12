@@ -1,54 +1,64 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 /**
- * Agent Terminal — Preload Script
- * 
- * Exposes collector API to renderer (Vue app).
- * Also injected into collector BrowserView to intercept postMessage.
+ * DataProbe Agent Terminal — Preload Script
+ *
+ * Exposes DataProbe and platform APIs to the Vue renderer.
+ * Also injected into collector BrowserView for postMessage interception.
  */
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // ── Collector status ──
-  getStatus: () => ipcRenderer.invoke('get-collector-status'),
-  
-  // ── Pipeline control ──
-  openBrowser: (url) => ipcRenderer.invoke('open-collector-browser', url),
-  startMitm: () => ipcRenderer.invoke('start-mitm'),
-  stopMitm: () => ipcRenderer.invoke('stop-mitm'),
+  // ── DataProbe Engine Status ──
+  getStatus: () => ipcRenderer.invoke('get-status'),
 
-  // ── Capture event ──
-  onCapture: (callback) => {
-    ipcRenderer.on('capture', (event, credential) => callback(credential));
+  // ── Investigation (Easy Mode) ──
+  startInvestigation: (target) => ipcRenderer.invoke('start-investigation', target),
+  stopInvestigation: () => ipcRenderer.invoke('stop-investigation'),
+  getEvidence: () => ipcRenderer.invoke('get-evidence'),
+  getSession: () => ipcRenderer.invoke('get-session'),
+  getData: () => ipcRenderer.invoke('get-data'),
+
+  // ── Rules ──
+  getRules: () => ipcRenderer.invoke('get-rules'),
+
+  // ── Built-in Browser ──
+  openBrowser: (url) => ipcRenderer.invoke('open-browser', url),
+  closeBrowser: () => ipcRenderer.invoke('close-browser'),
+
+  // ── Status Events ──
+  onDataProbeStatus: (callback) => {
+    ipcRenderer.on('dataprobe-status', (event, data) => callback(data));
   },
+  onUrlChanged: (callback) => {
+    ipcRenderer.on('url-changed', (event, url) => callback(url));
+  },
+
+  // ── Capture Events ──
   captureCredential: (credential) => {
     ipcRenderer.send('capture-credential', credential);
   },
-
-  // ── URL change events ──
-  onUrlChanged: (callback) => {
-    ipcRenderer.on('url-changed', (event, url) => callback(url));
+  onCapture: (callback) => {
+    ipcRenderer.on('capture', (event, credential) => callback(credential));
   },
 });
 
 // ═══════════════════════════════════════════
-// postMessage Interception（用于 BrowserView）
+// postMessage 拦截（BrowserView 内）
 // ═══════════════════════════════════════════
 
-// 仅在 BrowserView 中执行，不在主窗口执行
-if (window.location.origin !== 'http://localhost:5173' && 
+if (window.location.origin !== 'http://localhost:5173' &&
     window.location.origin !== 'file://') {
-  
-  // postMessage 捕获阶段拦截
+
   window.addEventListener('message', (event) => {
     const msg = event.data;
     if (!msg || !msg.action) return;
 
-    // 腾讯 Midas 支付拦截
     const handlers = [
       { action: 'wechat_wapbuy', extract: (m) => m.data?.url },
       { action: 'wechat_buy', extract: (m) => m.data?.info },
       { action: 'mqq_buy', extract: (m) => m.data?.info },
       { action: 'launch_schema', extract: (m) => m.data?.url },
+      { action: 'jump_face_url', extract: (m) => m.data?.schemaUrl || m.data?.h5Url },
       { action: 'MidasJSBridge_call', match: (m) => m.data?.cmd === 'launchPaySign',
         extract: (m) => m.data?.params },
     ];
@@ -58,7 +68,7 @@ if (window.location.origin !== 'http://localhost:5173' &&
         const value = h.extract(msg);
         if (value) {
           window.electronAPI?.captureCredential({
-            type: 'payment_url',
+            type: 'url',
             value: typeof value === 'string' ? value : JSON.stringify(value),
             platform: 'qq_midas',
             product: 'Q币',
@@ -71,5 +81,5 @@ if (window.location.origin !== 'http://localhost:5173' &&
         break;
       }
     }
-  }, true); // 捕获阶段
+  }, true);
 }

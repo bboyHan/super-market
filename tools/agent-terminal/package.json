@@ -1,23 +1,28 @@
 {
-  "name": "agent-terminal",
-  "version": "1.0.0",
-  "description": "Agent Terminal — 凭证采集工作站",
+  "name": "data-probe-terminal",
+  "version": "2.0.0",
+  "description": "DataProbe Agent Terminal — 数据开采对抗平台",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:vue\" \"sleep 3 && npm run dev:electron\"",
-    "dev:server": "cd server && python -m uvicorn main:app --host 127.0.0.1 --port 8800 --reload",
     "dev:vue": "cd src && npx vite --port 5173",
     "dev:electron": "electron .",
+    "dev": "concurrently \"npm run dev:vue\" \"sleep 3 && npm run dev:electron\"",
     "build:vue": "cd src && npx vite build",
-    "build:server": "cd server && pyinstaller --onefile --name agent-terminal-server main.py",
-    "build": "npm run build:vue && npm run build:server"
+    "build": "npm run build:vue",
+    "package": "electron-builder"
   },
   "dependencies": {
-    "electron": "^28.0.0",
-    "electron-updater": "^6.1.0"
+    "electron": "^28.0.0"
   },
   "devDependencies": {
-    "concurrently": "^8.2.0"
+    "concurrently": "^8.2.0",
+    "electron-builder": "^24.0.0",
+    "vue": "^3.4.0",
+    "vue-router": "^4.3.0",
+    "vite": "^5.2.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "typescript": "^5.4.0",
+    "vue-tsc": "^2.0.0"
   }
 }
