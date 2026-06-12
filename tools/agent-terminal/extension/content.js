@@ -15,7 +15,8 @@
 (function() {
   'use strict';
 
-  const BACKEND_URL = 'http://localhost:8800';
+  // Oracle 本地引擎 (默认端口 18801)
+  const BACKEND_URL = 'http://127.0.0.1:18801';
   const CAPTURE_API = '/api/capture/ingest';
 
   // ── 状态 ──

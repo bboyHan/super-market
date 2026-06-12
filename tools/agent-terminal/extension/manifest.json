@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Agent Terminal — 支付凭证采集器",
-  "version": "1.0.0",
-  "description": "自动拦截支付平台的 postMessage，提取支付链接/凭证，发送到本地采集后端",
-  "author": "Agent Terminal",
-  "homepage_url": "http://localhost:8801",
+  "name": "神谕 Oracle — 支付凭证采集器",
+  "version": "2.0.0",
+  "description": "与神谕(Oracle)本地引擎配合，自动拦截 postMessage/DOM/fetch 提取支付凭证",
+  "author": "Oracle",
+  "homepage_url": "http://localhost:18801",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -18,13 +18,22 @@
     "https://pay.qq.com/*",
     "https://graph.qq.com/*",
     "https://api.unipay.qq.com/*",
-    "http://localhost:8801/*"
+    "https://*.tenpay.com/*",
+    "https://*.weixin.qq.com/*",
+    "https://qpay.qq.com/*",
+    "https://jspay.qq.com/*",
+    "https://pagedoo.pay.qq.com/*",
+    "http://127.0.0.1:18801/*"
   ],
   "content_scripts": [
     {
       "matches": [
         "https://pay.qq.com/*",
-        "https://graph.qq.com/*"
+        "https://graph.qq.com/*",
+        "https://qpay.qq.com/*",
+        "https://jspay.qq.com/*",
+        "https://*.tenpay.com/*",
+        "https://pagedoo.pay.qq.com/*"
       ],
       "js": ["platforms/qq_midas.js", "content.js"],
       "run_at": "document_start",
@@ -38,6 +47,6 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Agent Terminal"
+    "default_title": "Oracle Collector"
   }
 }

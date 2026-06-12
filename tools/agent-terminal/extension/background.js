@@ -55,7 +55,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // ── 定期检查后端健康 ──
 async function checkBackend() {
   try {
-    const resp = await fetch('http://localhost:8801/api/health');
+    const resp = await fetch('http://127.0.0.1:18801/status');
     state.backendReachable = resp.ok;
   } catch {
     state.backendReachable = false;
