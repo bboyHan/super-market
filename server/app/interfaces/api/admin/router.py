@@ -1582,3 +1582,174 @@ async def reset_api_payer_secret(
     await session.commit()
     return {"code": 0, "message": "密钥已重置", "api_secret": new_secret}
 
+
+# ═══════════════════════════════════════════════════════════════
+# RISK DASHBOARD (风控与监控)
+# ═══════════════════════════════════════════════════════════════
+
+
+@router.get("/risk/dashboard")
+async def get_risk_dashboard(
+    days: int = 3,
+    session: AsyncSession = Depends(get_db_session),
+    _=Depends(_require_admin),
+):
+    """交易大盘 — 整体交易趋势、成功率、异常概览。"""
+    # Today's summary
+    today = await session.execute(text("""
+        SELECT COUNT(*) AS orders, COALESCE(SUM(amount),0) AS amount,
+               COUNT(*) FILTER (WHERE status='SUCCESS') AS success,
+               COUNT(*) FILTER (WHERE status IN ('PENDING','DELIVERING')) AS pending,
+               COUNT(*) FILTER (WHERE status IN ('CANCELLED','EXPIRED','FAILED')) AS failed
+        FROM orders WHERE created_at >= CURRENT_DATE
+    """))
+    t = today.first()
+
+    # Trend (last N days)
+    trend_rows = await session.execute(text("""
+        SELECT DATE(created_at) AS d, COUNT(*), COALESCE(SUM(amount),0),
+               COUNT(*) FILTER (WHERE status='SUCCESS') AS success
+        FROM orders WHERE created_at >= CURRENT_DATE - CAST(:d AS INTERVAL)
+        GROUP BY DATE(created_at) ORDER BY d
+    """).bindparams(d=f"{days} days"))
+    trend = [{"date": str(r[0]), "orders": r[1], "amount": r[2], "success": r[3]} for r in trend_rows]
+
+    # Top suppliers by volume
+    sup_rows = await session.execute(text("""
+        SELECT s.id, s.name, COUNT(*), COALESCE(SUM(o.amount),0)
+        FROM orders o JOIN suppliers s ON o.supplier_id=s.id
+        WHERE o.created_at >= CURRENT_DATE - CAST(:d AS INTERVAL)
+        GROUP BY s.id, s.name ORDER BY SUM(o.amount) DESC LIMIT 10
+    """).bindparams(d=f"{days} days"))
+    top_suppliers = [{"id": r[0], "name": r[1], "orders": r[2], "amount": r[3]} for r in sup_rows]
+
+    return {"code": 0, "data": {
+        "today": {
+            "total_orders": t[0] or 0, "total_amount": t[1] or 0,
+            "success_orders": t[2] or 0, "pending_orders": t[3] or 0,
+            "failed_orders": t[4] or 0,
+            "success_rate": round((t[2] or 0) / max(t[0] or 1, 1) * 100, 1),
+        },
+        "trend": trend,
+        "top_suppliers": top_suppliers,
+    }}
+
+
+@router.get("/risk/abnormal-orders")
+async def get_abnormal_orders(
+    status: str = "",
+    page: int = 1, limit: int = 20,
+    session: AsyncSession = Depends(get_db_session),
+    _=Depends(_require_admin),
+):
+    """异常订单列表 — 超时未确认、交付失败、状态不一致。"""
+    where = "1=1"
+    if status:
+        where += f" AND o.status = '{status}'"
+
+    total = await session.execute(text(f"SELECT count(*) FROM orders o WHERE {where}"))
+    rows = await session.execute(text(f"""
+        SELECT o.order_no, o.status, o.confirm_mode, o.amount,
+               o.created_at, o.updated_at, s.name AS supplier_name,
+               ap.name AS payer_name, a.name AS agent_name,
+               CASE WHEN o.status IN ('PENDING','DELIVERING')
+                     AND o.created_at < NOW() - INTERVAL '2 hours' THEN true ELSE false END AS is_timeout
+        FROM orders o
+        JOIN suppliers s ON o.supplier_id=s.id
+        JOIN api_payers ap ON o.api_payer_id=ap.id
+        LEFT JOIN agents a ON o.agent_id=a.id
+        WHERE {where}
+        ORDER BY o.created_at DESC
+        LIMIT :lim OFFSET :off
+    """).bindparams(lim=limit, off=(page-1)*limit))
+
+    return {"code": 0, "data": {
+        "items": [{
+            "order_no": r[0], "status": r[1], "confirm_mode": r[2],
+            "amount": r[3], "created_at": str(r[4]) if r[4] else None,
+            "updated_at": str(r[5]) if r[5] else None,
+            "supplier_name": r[6], "payer_name": r[7], "agent_name": r[8] or "-",
+            "is_timeout": r[9],
+        } for r in rows],
+        "total": total.scalar() or 0, "page": page, "limit": limit,
+    }}
+
+
+@router.get("/risk/health")
+async def get_system_health(
+    session: AsyncSession = Depends(get_db_session),
+    _=Depends(_require_admin),
+):
+    """系统健康度 — 订单量、回调队列积压、数据库状态。"""
+    # Order counts
+    total_orders = await session.execute(text("SELECT count(*) FROM orders"))
+    today_orders = await session.execute(text("SELECT count(*) FROM orders WHERE created_at >= CURRENT_DATE"))
+
+    # Callback backlog
+    cb_pending = await session.execute(text(
+        "SELECT count(*) FROM orders WHERE callback_url != '' AND callback_status != 'SUCCESS' AND callback_status != 'FAILED'"))
+    cb_failed = await session.execute(text(
+        "SELECT count(*) FROM orders WHERE callback_status = 'FAILED'"))
+
+    # Recent activity
+    last_10min = await session.execute(text(
+        "SELECT count(*) FROM orders WHERE created_at >= NOW() - INTERVAL '10 minutes'"))
+
+    return {"code": 0, "data": {
+        "orders": {
+            "total": total_orders.scalar() or 0,
+            "today": today_orders.scalar() or 0,
+            "last_10min": last_10min.scalar() or 0,
+        },
+        "callback_queue": {
+            "pending": cb_pending.scalar() or 0,
+            "failed": cb_failed.scalar() or 0,
+        },
+        "status": "healthy",
+    }}
+
+
+# ═══════════════════════════════════════════════════════════════
+# AUDIT LOGS (审计日志)
+# ═══════════════════════════════════════════════════════════════
+
+
+@router.get("/audit-logs")
+async def get_audit_logs(
+    user_id: int = 0,
+    action: str = "",
+    page: int = 1, limit: int = 50,
+    session: AsyncSession = Depends(get_db_session),
+    _=Depends(_require_admin),
+):
+    """操作审计日志 — 查询用户登录和关键操作记录。"""
+    where = ["1=1"]
+    params = {"lim": limit, "off": (page-1)*limit}
+
+    if user_id:
+        where.append(f"user_id = :uid")
+        params["uid"] = user_id
+    if action == "error":
+        where.append("NOT success")
+    elif action == "login":
+        where.append("success")
+    elif action == "force_complete":
+        where.append("fail_reason LIKE '强制完成%'")
+
+    w = " AND ".join(where)
+    total = await session.execute(text(f"SELECT count(*) FROM login_logs WHERE {w}").bindparams(**params))
+    rows = await session.execute(text(f"""
+        SELECT id, user_id, username, ip_address, user_agent, success, fail_reason, created_at
+        FROM login_logs WHERE {w} ORDER BY created_at DESC LIMIT :lim OFFSET :off
+    """).bindparams(**params))
+
+    return {"code": 0, "data": {
+        "items": [{
+            "id": r[0], "user_id": r[1], "username": r[2],
+            "ip_address": r[3], "user_agent": r[4],
+            "success": r[5], "fail_reason": r[6],
+            "created_at": str(r[7]) if r[7] else None,
+        } for r in rows],
+        "total": total.scalar() or 0, "page": page, "limit": limit,
+    }}
+
