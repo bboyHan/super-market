@@ -4,7 +4,7 @@ import hashlib
 import json
 
 BASE = "http://localhost:8000"
-ADM = {"username": "admin", "password": "admin123"}
+ADM = {"username": "superadmin", "password": "superadmin"}
 
 
 def md5_sign(params: dict, secret: str) -> str:

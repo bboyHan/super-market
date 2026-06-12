@@ -731,6 +731,31 @@ async def daily_stats_category(
     } for r in rows]}
 
 
+@router.get("/daily-stats/trend")
+async def daily_stats_trend(
+    days: int = 7,
+    sid: int = Depends(_get_supplier_id),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """近 N 天交易趋势（按天聚合）。返回每天的总订单数和总金额。"""
+    rows = await session.execute(
+        text("""
+            SELECT DATE(o.created_at) AS stat_date,
+                   COUNT(*) AS total_orders,
+                   COALESCE(SUM(o.amount), 0) AS total_amount
+            FROM orders o
+            WHERE o.supplier_id = :sid
+              AND o.created_at >= CURRENT_DATE - CAST(:d AS INTERVAL)
+            GROUP BY DATE(o.created_at)
+            ORDER BY stat_date
+        """).bindparams(sid=sid, d=f"{days} days"))
+    return {"code": 0, "data": [{
+        "date": str(r[0]) if r[0] else None,
+        "total_orders": r[1],
+        "total_amount": r[2],
+    } for r in rows]}
+
+
 @router.post("/daily-stats/refresh")
 async def daily_stats_refresh(
     sid: int = Depends(_get_supplier_id),

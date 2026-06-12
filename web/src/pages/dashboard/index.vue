@@ -2,7 +2,9 @@
 import StatCard from '@/components/ui/StatCard.vue'
 import DataTable from '@/components/ui/DataTable.vue'
 import Badge from '@/components/ui/Badge.vue'
-import { ref, onMounted } from 'vue'
+import TrendChart from '@/components/ui/TrendChart.vue'
+import { ref, onMounted, computed } from 'vue'
+import { TrendingUp } from 'lucide-vue-next'
 import api from '@/utils/api'
 
 interface DashboardData {
@@ -30,10 +32,18 @@ interface ProductItem {
   suggested_price: number
 }
 
+interface DailyTrend {
+  date: string
+  total_orders: number
+  total_amount: number
+}
+
 const stats = ref({ today_amount: 0, yesterday_amount: 0, agent_count: 0, apayer_count: 0 })
 const recentOrders = ref<OrderItem[]>([])
 const products = ref<ProductItem[]>([])
+const dailyTrends = ref<DailyTrend[]>([])
 const loading = ref(true)
+const trendLoading = ref(true)
 
 const orderColumns = [
   { key: 'order_no', label: '订单号' },
@@ -70,6 +80,23 @@ const statusTypeMap: Record<string, string> = {
   FAILED: 'danger',
 }
 
+// Compute daily trend chart data from merchant-stats
+const trendData = computed(() => {
+  // Aggregate daily stats across all merchants
+  const dayMap = new Map<string, number>()
+  for (const d of dailyTrends.value) {
+    const cur = dayMap.get(d.date) || 0
+    dayMap.set(d.date, cur + d.total_amount)
+  }
+  return Array.from(dayMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-7)
+    .map(([date, amount]) => ({
+      label: date.slice(5), // MM-DD
+      value: amount,
+    }))
+})
+
 onMounted(async () => {
   try {
     const [dashRes, prodRes, orderRes] = await Promise.all([
@@ -85,6 +112,24 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+
+  // Load trend data
+  try {
+    const trendRes = await api.get<{code: number; data: DailyTrend[]}>('/api/merchant/daily-stats/trend?days=7')
+    dailyTrends.value = trendRes.data || []
+  } catch {
+    // Trend data is optional
+  } finally {
+    trendLoading.value = false
+  }
+})
+
+// Helper: percentage change
+const pctChange = computed(() => {
+  const t = stats.value.today_amount
+  const y = stats.value.yesterday_amount
+  if (y === 0) return t > 0 ? 100 : 0
+  return Math.round(((t - y) / y) * 100)
 })
 </script>
 
@@ -100,6 +145,42 @@ onMounted(async () => {
       <StatCard title="昨日交易额" :value="stats.yesterday_amount + ' 积分'" unit="积分" />
       <StatCard title="代理商总数" :value="stats.agent_count" unit="个" />
       <StatCard title="API支付商" :value="stats.apayer_count" unit="个" />
+    </div>
+
+    <!-- Trend Chart row -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      <div class="lg:col-span-3 card p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-[var(--color-text)] flex items-center gap-1">
+            <TrendingUp class="w-4 h-4" /> 近7日交易趋势
+          </h3>
+          <span v-if="!trendLoading && pctChange !== 0"
+            class="text-xs font-medium"
+            :class="pctChange >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'"
+          >
+            {{ pctChange >= 0 ? '↑' : '↓' }} {{ Math.abs(pctChange) }}%
+          </span>
+        </div>
+        <TrendChart v-if="!trendLoading" :data="trendData" color="var(--color-primary)" :height="180" />
+        <div v-else class="text-sm text-[var(--color-text-muted)] py-8 text-center">加载趋势数据...</div>
+      </div>
+
+      <div class="card p-4">
+        <h3 class="text-sm font-semibold text-[var(--color-text)] mb-3">今日概览</h3>
+        <div class="space-y-3">
+          <div>
+            <div class="text-xs text-[var(--color-text-muted)]">今日交易额</div>
+            <div class="text-xl font-bold text-[var(--color-text)]">{{ (stats.today_amount || 0).toLocaleString() }}</div>
+          </div>
+          <div>
+            <div class="text-xs text-[var(--color-text-muted)]">较昨日</div>
+            <div class="text-lg font-semibold"
+              :class="pctChange >= 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'">
+              {{ pctChange >= 0 ? '+' : '' }}{{ pctChange }}%
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
