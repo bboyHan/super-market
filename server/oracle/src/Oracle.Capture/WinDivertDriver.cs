@@ -30,6 +30,8 @@ public class WinDivertDriver : ICaptureDriver
         ("jspay.qq.com", "jspay"), ("myun.tenpay.com", "myun"),
         ("qpay.qq.com", "qpay"),
         ("mp.weixin.qq.com", "mp.wx"),
+        ("aegis.qq.com", "aegis"), ("graph.qq.com", "graph"),
+        ("jifen.qq.com", "jifen"), ("szmg.qq.com", "szmg"), ("log.tbs.qq.com", "logtbs"),
     };
 
     private static bool IsPaySni(string sni)

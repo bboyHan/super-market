@@ -13,7 +13,7 @@ public class TrafficBuffer
     private readonly int _maxItems;
     private readonly int _maxBodySize;
 
-    public TrafficBuffer(int maxItems = 100, int maxBodySize = 10_240)
+    public TrafficBuffer(int maxItems = 500, int maxBodySize = 50_240)
     {
         _maxItems = maxItems;
         _maxBodySize = maxBodySize;
@@ -21,7 +21,8 @@ public class TrafficBuffer
 
     /// <summary>记录一条解密后的流量</summary>
     public void Record(string domain, string method, string path, string requestBody,
-        int statusCode, Dictionary<string, string> responseHeaders, string responseBody)
+        int statusCode, Dictionary<string, string> responseHeaders, string responseBody,
+        bool isPaymentDomain = true)
     {
         var item = new CapturedTraffic
         {
@@ -35,6 +36,7 @@ public class TrafficBuffer
             RequestBody = Truncate(requestBody, _maxBodySize),
 
             ResponseHeaders = responseHeaders?.Aggregate("", (s, kv) => s + $"{kv.Key}: {kv.Value}\n") ?? "",
+            IsPaymentDomain = isPaymentDomain,
             ResponseBody = Truncate(responseBody, _maxBodySize),
         };
 
@@ -64,6 +66,7 @@ public class CapturedTraffic
     public string RequestBody { get; set; } = "";
     public string ResponseHeaders { get; set; } = "";
     public string ResponseBody { get; set; } = "";
+    public bool IsPaymentDomain { get; set; } = true;
     public string ShortLabel => $"{Method} {Domain}{Path}";
     public string TimestampStr => Timestamp.ToLocalTime().ToString("HH:mm:ss");
 }
