@@ -15,4 +15,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.0" />
   </ItemGroup>
+
+  <!-- Copy platforms/*.json to build output (extraction rules) -->
+  <ItemGroup>
+    <Content Include="platforms/**/*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>

@@ -1,0 +1,16 @@
+{
+  "name": "wechat_pay",
+  "description": "微信支付 API — api.mch.weixin.qq.com / pay.weixin.qq.com",
+  "priority": 90,
+  "enabled": true,
+  "matchers": [
+    {"field": "domain", "operator": "regex", "value": "(api\\.mch\\.weixin\\.qq\\.com|pay\\.weixin\\.qq\\.com)"}
+  ],
+  "extractors": [
+    {"name": "weixin_url", "credential_type": "payment_url", "source": "response_body",
+     "pattern": "weixin://[^\\s\"'<>)]+", "output_field": "value"},
+    {"name": "payment_link", "credential_type": "payment_url", "source": "response_body",
+     "pattern": "https?://pay\\.weixin\\.qq\\.com/[^\\s\"'<>)]+", "output_field": "value"},
+    {"name": "prepay_id", "source": "response_body", "pattern": "prepay_id=([^\\s&\"]+)", "output_field": "prepay_id"}
+  ]
+}

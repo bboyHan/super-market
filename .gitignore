@@ -22,3 +22,6 @@ server/oracle/**/*.user
 web/.npm-cache/
 server/logs/
 .claude/
+traffic*.json
+*.apk
+oracle_ca.cer

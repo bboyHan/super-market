@@ -1,0 +1,18 @@
+{
+  "name": "qq_midas",
+  "description": "腾讯 Midas 支付体系 — unipay/storeapi/pagedooapi 支付 API，提取 weixin:// 支付链接",
+  "priority": 100,
+  "enabled": true,
+  "matchers": [
+    {"field": "domain", "operator": "regex", "value": ".*(unipay|storeapi|pagedooapi)\\.qq\\.com"},
+    {"field": "path", "operator": "regex", "value": "(web_save|CommonCallMpgo|wechat_query|web_page_info|cmall_query)"}
+  ],
+  "extractors": [
+    {"name": "weixin_pay_url", "credential_type": "payment_url", "source": "response_body",
+     "pattern": "weixin://wxpay/bizpayurl\\?pr=[^\\s\"'<>)]+", "output_field": "value"},
+    {"name": "openid", "source": "request_body", "pattern": "openid=([A-F0-9]+)", "output_field": "openid"},
+    {"name": "pay_method", "source": "request_body", "pattern": "pay_method=(\\w+)", "output_field": "pay_method"},
+    {"name": "product_id", "source": "request_body", "pattern": "appid=(\\d+)", "output_field": "product_id"},
+    {"name": "total_fee", "source": "request_body", "pattern": "total_fee=(\\d+)", "output_field": "total_fee"}
+  ]
+}

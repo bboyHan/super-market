@@ -90,9 +90,10 @@ public class DnsSpoofer : IDisposable
     {
         if (_disposed || _handle != nint.Zero) return;
 
-        // DIVERT 模式：捕获入站的 DNS 响应（来自 DNS 服务器端口 53）
+        // SNIFF 模式：捕获入站的 DNS 响应（来自 DNS 服务器端口 53）
+        // 使用 priority=1，避免与 WinDivertDriver (priority=0) 冲突
         var filter = "inbound and udp.SrcPort == 53 and udp.PayloadLength > 0";
-        _handle = WinDivertOpen(filter, WINDIVERT_LAYER_NETWORK, 0, 0);
+        _handle = WinDivertOpen(filter, WINDIVERT_LAYER_NETWORK, 1, 0);
 
         if (_handle == nint.Zero || _handle == (nint)(-1))
         {

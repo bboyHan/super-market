@@ -1,0 +1,17 @@
+{
+  "name": "tenpay",
+  "description": "微信支付 / Tenpay — wx.tenpay.com / tenpay.com / myun.tenpay.com",
+  "priority": 90,
+  "enabled": true,
+  "matchers": [
+    {"field": "domain", "operator": "regex", "value": "(wx\\.tenpay\\.com|tenpay\\.com|myun\\.tenpay\\.com)"}
+  ],
+  "extractors": [
+    {"name": "payment_url", "credential_type": "payment_url", "source": "response_body",
+     "pattern": "https?://wx\\.tenpay\\.com/[^\\s\"'<>)]+", "output_field": "value"},
+    {"name": "weixin_pay_url", "credential_type": "payment_url", "source": "response_body",
+     "pattern": "weixin://[^\\s\"'<>)]+", "output_field": "value"},
+    {"name": "openid", "source": "request_body", "pattern": "openid=([A-F0-9]+)", "output_field": "openid"},
+    {"name": "pay_method", "source": "response_body", "pattern": "\"pay_method\"\\s*:\\s*\"([^\"]+)\"", "output_field": "pay_method"}
+  ]
+}

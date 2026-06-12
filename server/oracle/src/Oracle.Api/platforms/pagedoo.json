@@ -1,0 +1,18 @@
+{
+  "name": "pagedoo",
+  "description": "Pagedoo 支付页 — pagedoo.pay.qq.com / agent.pagedoo.qq.com / report.pagedoo.qq.com",
+  "priority": 95,
+  "enabled": true,
+  "matchers": [
+    {"field": "domain", "operator": "regex", "value": ".*(pagedoo|agent\\.pagedoo|report\\.pagedoo)\\.qq\\.com"},
+    {"field": "path", "operator": "not", "value": ".js"}
+  ],
+  "extractors": [
+    {"name": "payment_url", "credential_type": "payment_url", "source": "response_body",
+     "pattern": "weixin://wxpay/bizpayurl\\?pr=[^\\s\"'<>)]+", "output_field": "value"},
+    {"name": "payment_link", "credential_type": "payment_url", "source": "response_body",
+     "pattern": "https?://[^\\s\"'<>]*(tenpay|qq\\.com)[^\\s\"'<>)]+", "output_field": "value"},
+    {"name": "order_id", "source": "response_body", "pattern": "\"orderId\"\\s*:\\s*\"([^\"]+)\"", "output_field": "order_id"},
+    {"name": "token", "source": "response_body", "pattern": "\"token\"\\s*:\\s*\"([^\"]+)\"", "output_field": "token"}
+  ]
+}

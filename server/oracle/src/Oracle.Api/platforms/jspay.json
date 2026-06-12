@@ -1,0 +1,16 @@
+{
+  "name": "jspay",
+  "description": "客户端 JS 支付页 — jspay.qq.com，QR 码由前端 JS 生成，提取页面中的支付参数",
+  "priority": 85,
+  "enabled": true,
+  "matchers": [
+    {"field": "domain", "operator": "contains", "value": "jspay.qq.com"}
+  ],
+  "extractors": [
+    {"name": "pay_url", "credential_type": "payment_url", "source": "response_body",
+     "pattern": "weixin://wxpay/bizpayurl\\?pr=[^\\s\"'<>)]+", "output_field": "value"},
+    {"name": "pay_args_json", "credential_type": "payment_params", "source": "response_body",
+     "pattern": "\"(appId|timeStamp|nonceStr|package|signType|paySign)\"\\s*:\\s*\"([^\"]+)\"", "output_field": "value"},
+    {"name": "pay_method", "source": "response_body", "pattern": "\"payMethond\"\\s*:\\s*\"([^\"]+)\"", "output_field": "pay_method"}
+  ]
+}
