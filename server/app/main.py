@@ -31,6 +31,9 @@ def create_app() -> FastAPI:
         # Start order worker (auto-cancel expired + Redis counters)
         from app.worker.order_worker import start_order_worker
         asyncio.create_task(start_order_worker())
+        # Start stats aggregation worker
+        from app.worker.stats_worker import start_stats_worker
+        asyncio.create_task(start_stats_worker())
         yield
         # ── shutdown ─────────────────────────────────────
         callback_task.cancel()

@@ -104,19 +104,21 @@ async def list_orders(
     sid: int = Depends(_get_supplier_id),
     session: AsyncSession = Depends(get_db_session),
 ):
-    where = f"o.supplier_id = {sid}"
+    params = {'sid': sid, 'lim': limit, 'off': (page-1)*limit}
+    where_clause = 'o.supplier_id = :sid'
     if status:
-        where += f" AND o.status = '{status}'"
+        where_clause += ' AND o.status = :st'
+        params['st'] = status
     
-    total = await session.execute(text(f"SELECT count(*) FROM orders o WHERE {where}"))
-    rows = await session.execute(text(f"""
-        SELECT o.order_no, o.amount, o.status, o.confirm_mode, o.created_at,
+    total = await session.execute(
+        text(f"SELECT count(*) FROM orders o WHERE {where_clause}").bindparams(**{k:v for k,v in params.items() if k != 'lim' and k != 'off'}))
+    rows = await session.execute(
+        text(f"""SELECT o.order_no, o.amount, o.status, o.confirm_mode, o.created_at,
                ap.name, p.name, a.name
         FROM orders o LEFT JOIN api_payers ap ON o.api_payer_id=ap.id
         LEFT JOIN products p ON o.product_id=p.id
         LEFT JOIN agents a ON o.agent_id=a.id
-        WHERE {where} ORDER BY o.created_at DESC LIMIT {limit} OFFSET {(page-1)*limit}
-    """))
+        WHERE {where_clause} ORDER BY o.created_at DESC LIMIT :lim OFFSET :off""").bindparams(**params))
     return {"code": 0, "data": {
         "items": [{"order_no": r[0], "amount": r[1], "status": r[2], "confirm_mode": r[3],
                     "created_at": str(r[4]) if r[4] else None, "api_payer_name": r[5],
@@ -733,15 +735,18 @@ async def get_transactions(
     sid: int = Depends(_get_supplier_id),
     session: AsyncSession = Depends(get_db_session),
 ):
-    where = f"w.owner_type='SUPPLIER' AND w.owner_id={sid}"
+    params_w = {'sid': sid, 'lim': limit, 'off': (page-1)*limit}
+    where_w = "w.owner_type='SUPPLIER' AND w.owner_id=:sid"
     if type_filter:
-        where += f" AND wt.type='{type_filter}'"
-    total = await session.execute(text(f"SELECT count(*) FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id=w.id WHERE {where}"))
-    rows = await session.execute(text(f"""
-        SELECT wt.id, wt.type, wt.amount, wt.balance_before, wt.balance_after, wt.remark, wt.status, wt.created_at
+        where_w += ' AND wt.type=:tf'
+        params_w['tf'] = type_filter
+    total = await session.execute(
+        text(f"SELECT count(*) FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id=w.id WHERE {where_w}")
+        .bindparams(**{k:v for k,v in params_w.items() if k not in ('lim','off')}))
+    rows = await session.execute(
+        text(f"""SELECT wt.id, wt.type, wt.amount, wt.balance_before, wt.balance_after, wt.remark, wt.status, wt.created_at
         FROM wallet_transactions wt JOIN wallets w ON wt.wallet_id=w.id
-        WHERE {where} ORDER BY wt.created_at DESC LIMIT {limit} OFFSET {(page-1)*limit}
-    """))
+        WHERE {where_w} ORDER BY wt.created_at DESC LIMIT :lim OFFSET :off""").bindparams(**params_w))
     return {"code": 0, "data": {"items": [{"id": r[0], "type": r[1], "amount": r[2], "balance_before": r[3],
                                             "balance_after": r[4], "remark": r[5], "status": r[6],
                                             "created_at": str(r[7]) if r[7] else None} for r in rows],
