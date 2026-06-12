@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.persistence.postgres.session import get_db_session
 from app.interfaces.api.auth.router import get_current_user
+from app.domain.routing.strategy import RoutingStrategy
+from app.domain.routing.engine import _STRATEGY_MAP
 
 router = APIRouter(prefix="/api/merchant", tags=["merchant"])
 
@@ -252,6 +254,106 @@ async def list_products(
                                   "face_value": r[3], "suggested_price": r[4],
                                   "collection_config": r[5] if isinstance(r[5], dict) else {},
                                   "authorized": bool(r[6]), "status": bool(r[7])} for r in rows]}
+
+
+# ── Routing Strategy Config ─────────────────────────────────
+
+
+@router.get("/products/{product_id}/routing")
+async def get_routing_config(
+    product_id: int,
+    sid: int = Depends(_get_supplier_id),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """获取指定货品的路由策略配置。"""
+    # Verify product authorization
+    auth = await session.execute(
+        text("SELECT id FROM supplier_product_auth WHERE supplier_id=:sid AND product_id=:pid AND status=TRUE")
+        .bindparams(sid=sid, pid=product_id))
+    if not auth.first():
+        raise HTTPException(status_code=404, detail="货品不存在或未授权")
+
+    rule_row = await session.execute(
+        text("SELECT id, strategy FROM routing_rules WHERE supplier_id=:sid AND product_id=:pid")
+        .bindparams(sid=sid, pid=product_id))
+    rule = rule_row.first()
+
+    agents = []
+    if rule:
+        items = await session.execute(
+            text("SELECT i.agent_id, a.name, i.priority, i.enabled "
+                 "FROM routing_rule_items i JOIN agents a ON i.agent_id=a.id "
+                 "WHERE i.rule_id=:rid ORDER BY i.priority ASC")
+            .bindparams(rid=rule[0]))
+        agents = [{"agent_id": r[0], "agent_name": r[1], "priority": r[2], "enabled": r[3]} for r in items]
+
+    return {"code": 0, "data": {
+        "strategy": rule[1] if rule else "ROUND_ROBIN",
+        "agents": agents,
+    }}
+
+
+class RoutingAgentItem(BaseModel):
+    agent_id: int
+    priority: int = 0
+    enabled: bool = True
+
+
+@router.put("/products/{product_id}/routing")
+async def update_routing_config(
+    product_id: int,
+    strategy: str = "ROUND_ROBIN",
+    agents: list[RoutingAgentItem] = [],
+    sid: int = Depends(_get_supplier_id),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """更新货品的路由策略和代理商分配。
+
+    支持三种策略:
+      - ROUND_ROBIN: 轮询分配（默认）
+      - PRIORITY: 按优先级顺序分配
+      - WEIGHTED: 按权重比例分配（priority 值作为权重）
+    """
+    # Verify strategy
+    if strategy not in _STRATEGY_MAP:
+        raise HTTPException(status_code=400, detail=f"无效策略: {strategy}，可选: {', '.join(_STRATEGY_MAP.keys())}")
+
+    # Verify product authorization
+    auth = await session.execute(
+        text("SELECT id FROM supplier_product_auth WHERE supplier_id=:sid AND product_id=:pid AND status=TRUE")
+        .bindparams(sid=sid, pid=product_id))
+    if not auth.first():
+        raise HTTPException(status_code=404, detail="货品不存在或未授权")
+
+    # Verify all agents belong to this supplier
+    for item in agents:
+        ag = await session.execute(
+            text("SELECT id FROM agents WHERE id=:aid AND supplier_id=:sid").bindparams(aid=item.agent_id, sid=sid))
+        if not ag.first():
+            raise HTTPException(status_code=400, detail=f"代理商 #{item.agent_id} 不存在或不属于你")
+
+    # Upsert routing rule
+    rule_row = await session.execute(
+        text("INSERT INTO routing_rules (supplier_id, product_id, strategy) "
+             "VALUES (:sid, :pid, :str) "
+             "ON CONFLICT (supplier_id, product_id) DO UPDATE SET strategy=EXCLUDED.strategy "
+             "RETURNING id")
+        .bindparams(sid=sid, pid=product_id, str=strategy))
+    rule_id = rule_row.scalar()
+
+    # Replace all rule items
+    await session.execute(
+        text("DELETE FROM routing_rule_items WHERE rule_id=:rid").bindparams(rid=rule_id))
+    for item in agents:
+        await session.execute(
+            text("INSERT INTO routing_rule_items (rule_id, agent_id, priority, enabled) "
+                 "VALUES (:rid, :aid, :pri, :en)")
+            .bindparams(rid=rule_id, aid=item.agent_id, pri=item.priority, en=item.enabled))
+
+    await session.commit()
+
+    return {"code": 0, "data": {"strategy": strategy, "agents_count": len(agents)},
+            "message": f"路由策略已更新为 {strategy}"}
 
 
 # ── Agents (supplier manages their own) ──────────────────────
@@ -637,6 +739,47 @@ async def get_category_stats(
 
 
 # ── Daily Stats (对账看板) ────────────────────────────────────
+
+@router.get("/daily-stats/merchant/export")
+async def export_merchant_stats_csv(
+    date: str = "",
+    sid: int = Depends(_get_supplier_id),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """导出按 API 支付商的日结统计为 CSV（供线下对账）。"""
+    import io
+    import csv
+
+    target_date = date or str(__import__("datetime").date.today())
+
+    rows = await session.execute(text("""
+        SELECT ap.name,
+               COUNT(*) AS total_orders,
+               COUNT(*) FILTER (WHERE o.status = 'SUCCESS') AS success_orders,
+               COALESCE(SUM(o.amount), 0) AS total_amount,
+               COALESCE(SUM(o.amount) FILTER (WHERE o.status = 'SUCCESS'), 0) AS success_amount
+        FROM orders o
+        JOIN api_payers ap ON o.api_payer_id = ap.id
+        WHERE o.supplier_id = :sid
+          AND o.created_at >= CAST(:dt AS DATE)
+          AND o.created_at < (CAST(:dt AS DATE) + INTERVAL '1 day')
+        GROUP BY ap.name
+        ORDER BY ap.name
+    """).bindparams(sid=sid, dt=target_date))
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["API支付商名称", "总订单数", "成功订单数", "总金额(积分)", "成功金额(积分)"])
+    for r in rows:
+        writer.writerow([r[0], r[1], r[2], r[3], r[4]])
+
+    from fastapi.responses import Response
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=daily_stats_{target_date}.csv"},
+    )
+
 
 @router.get("/daily-stats/merchant")
 async def daily_stats_merchant(

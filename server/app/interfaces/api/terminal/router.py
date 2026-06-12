@@ -343,6 +343,57 @@ async def upload_inventory(
     }
 
 
+# ── 3b. Inventory Alert Config ────────────────────────────────
+
+
+class AlertConfigRequest(BaseModel):
+    product_id: int
+    threshold: int = 10
+    enabled: bool = True
+
+
+@router.get("/inventory/alerts")
+async def list_alert_configs(
+    agent_id: int = Depends(_get_agent_id),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """获取当前代理商的库存预警配置列表。"""
+    rows = await session.execute(
+        text("""
+            SELECT ia.id, ia.product_id, p.name, ia.threshold, ia.enabled,
+                   (SELECT COUNT(*) FROM inventory_items i WHERE i.product_id=ia.product_id AND i.agent_id=ia.agent_id AND i.status='AVAILABLE') AS available
+            FROM inventory_alerts ia
+            JOIN products p ON ia.product_id = p.id
+            WHERE ia.agent_id = :aid
+            ORDER BY p.name
+        """).bindparams(aid=agent_id))
+    return {"code": 0, "data": [{
+        "id": r[0], "product_id": r[1], "product_name": r[2],
+        "threshold": r[3], "enabled": r[4], "available": r[5],
+    } for r in rows]}
+
+
+@router.put("/inventory/alerts/{product_id}")
+async def update_alert_config(
+    product_id: int,
+    req: AlertConfigRequest,
+    agent_id: int = Depends(_get_agent_id),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """设置单个货品的库存预警阈值。"""
+    if req.threshold < 1:
+        raise HTTPException(status_code=400, detail="阈值必须大于0")
+
+    await session.execute(
+        text("""INSERT INTO inventory_alerts (agent_id, product_id, threshold, enabled, updated_at)
+                VALUES (:aid, :pid, :th, :en, NOW())
+                ON CONFLICT (agent_id, product_id)
+                DO UPDATE SET threshold=EXCLUDED.threshold, enabled=EXCLUDED.enabled, updated_at=NOW()""")
+        .bindparams(aid=agent_id, pid=product_id, th=req.threshold, en=req.enabled))
+    await session.commit()
+    return {"code": 0, "message": f"库存预警已设置: 低于 {req.threshold} 条时通知"}
+
+
 # ── 4. Agent's Inventory List ────────────────────────────────
 
 @router.get("/inventory")
