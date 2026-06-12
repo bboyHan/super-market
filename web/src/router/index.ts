@@ -74,6 +74,36 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '工具授权', icon: 'Key', role: 'ADMIN' },
   },
   {
+    path: '/admin/risk-dashboard',
+    name: 'AdminRiskDashboard',
+    component: () => import('@/pages/admin/risk-dashboard.vue'),
+    meta: { title: '风控大盘', role: 'ADMIN' },
+  },
+  {
+    path: '/admin/audit-logs',
+    name: 'AdminAuditLogs',
+    component: () => import('@/pages/admin/audit-logs.vue'),
+    meta: { title: '审计日志', role: 'ADMIN' },
+  },
+  {
+    path: '/admin/announcements',
+    name: 'AdminAnnouncements',
+    component: () => import('@/pages/admin/announcements.vue'),
+    meta: { title: '系统公告', role: 'ADMIN' },
+  },
+  {
+    path: '/admin/fee-config',
+    name: 'AdminFeeConfig',
+    component: () => import('@/pages/admin/fee-config.vue'),
+    meta: { title: '手续费率', role: 'ADMIN' },
+  },
+  {
+    path: '/products/:id/routing',
+    name: 'ProductRouting',
+    component: () => import('@/pages/products/routing-config.vue'),
+    meta: { title: '路由策略' },
+  },
+  {
     path: '/agent/auth-tokens',
     name: 'AgentAuthTokens',
     component: () => import('@/pages/agent/auth-tokens.vue'),

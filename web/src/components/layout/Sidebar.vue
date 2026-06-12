@@ -6,6 +6,7 @@ import {
   LayoutDashboard, ShoppingCart, Users, Wallet, Cpu,
   BarChart3, Package, Warehouse,
   ChevronLeft, ChevronRight, Store, Shield, Terminal, DollarSign, Settings, Key,
+  TrendingUp, Activity, AlertTriangle,
 } from 'lucide-vue-next'
 
 const props = defineProps<{ collapsed: boolean; mobileOpen: boolean }>()
@@ -34,6 +35,10 @@ const adminItems = [
 { label: '充值审核', icon: DollarSign, path: '/admin/deposits' },
   { label: '模拟终端', icon: Terminal, path: '/admin/simulate' },
   { label: '商品配置', icon: Settings, path: '/admin/product-configs' },
+  { label: '风控大盘', icon: TrendingUp, path: '/admin/risk-dashboard' },
+  { label: '审计日志', icon: Activity, path: '/admin/audit-logs' },
+  { label: '系统公告', icon: AlertTriangle, path: '/admin/announcements' },
+  { label: '手续费率', icon: DollarSign, path: '/admin/fee-config' },
 ]
 
 const isActive = (path: string) => route.path === path || route.path.startsWith(path + '/')
