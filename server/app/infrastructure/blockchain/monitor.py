@@ -96,7 +96,7 @@ class BlockchainMonitorWorker:
         if fetcher is None:
             logger.warning("No fetch method for chain %s", chain)
             return
-        transfers = fetcher(address, since_timestamp_ms=since_ms, limit=50)
+        transfers = await fetcher(address, since_timestamp_ms=since_ms, limit=50)
 
         if not transfers:
             # Update poll count even if no new txns

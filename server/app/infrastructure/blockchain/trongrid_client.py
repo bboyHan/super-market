@@ -2,10 +2,9 @@
 Trongrid API 客户端 — 查询 TRC20 USDT 交易
 文档: https://developers.tron.network/reference
 """
-import json, time, logging
+import json, logging
 from typing import Optional
-from urllib.request import Request, urlopen
-from urllib.error import URLError
+import httpx
 
 TRONGRID_API = "https://api.trongrid.io"
 USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
@@ -44,7 +43,7 @@ class TrongridClient:
                     time.sleep(1 + attempt)
         return {"success": False, "error": f"Request failed after 3 attempts", "data": []}
 
-    def get_usdt_transfers(self, address: str, limit: int = 50,
+    async def get_usdt_transfers(self, address: str, limit: int = 50,
                            min_timestamp: int = 0,
                            fingerprint: str = "") -> dict:
         """
@@ -69,7 +68,7 @@ class TrongridClient:
     def get_account_balance(self, address: str) -> Optional[float]:
         """Get TRC20 USDT balance for an address. Returns USDT amount or None."""
         path = f"/v1/accounts/{address}"
-        data = self._get(path)
+        data = await self._get(path)
         if not data.get("data"):
             # Maybe hex format needed
             path = f"/v1/accounts/{address}"
@@ -90,7 +89,7 @@ class TrongridClient:
     def get_transaction_info(self, tx_hash: str) -> Optional[dict]:
         """Get transaction info by hash."""
         path = f"/v1/transactions/{tx_hash}"
-        data = self._get(path)
+        data = await self._get(path)
         if data.get("data"):
             return data["data"][0]
         return None

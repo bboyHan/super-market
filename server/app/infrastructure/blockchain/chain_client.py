@@ -6,10 +6,9 @@ Etherscan V2 migration: https://docs.etherscan.io/v2-migration
 - BscScan still uses V1: https://api.bscscan.com/api?...
 """
 from __future__ import annotations
-import json, time, logging
+import json, logging
 from typing import Optional
-from urllib.request import Request, urlopen
-from urllib.error import URLError
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -47,34 +46,33 @@ class EtherscanV2Client:
         self.chain_id = chain_id
         self.usdt_contract = usdt_contract.lower()
     
-    def _call(self, params: dict) -> dict:
+    async def _call(self, params: dict) -> dict:
         params.setdefault("apikey", self.api_key)
         params["chainid"] = self.chain_id
         qs = "&".join(f"{k}={v}" for k, v in params.items())
         url = f"{self.base_url}?{qs}"
         
-        for attempt in range(3):
-            try:
-                req = Request(url, headers={"Accept": "application/json"})
-                with urlopen(req, timeout=15) as resp:
-                    data = json.loads(resp.read())
-                if data.get("status") == "1":
+        async with httpx.AsyncClient(timeout=15) as client:
+            for attempt in range(3):
+                try:
+                    resp = await client.get(url, headers={"Accept": "application/json"})
+                    data = resp.json()
+                    if data.get("status") == "1":
+                        return data
+                    msg = data.get("message", "")
+                    if "No transactions" in msg:
+                        return {"status": "1", "result": []}
+                    if attempt < 2:
+                        logger.warning("Etherscan V2 attempt %d: %s", attempt+1, msg[:50])
+                        continue
                     return data
-                msg = data.get("message", "")
-                if "No transactions" in msg:
-                    return {"status": "1", "result": []}
-                if attempt < 2:
-                    logger.warning("Etherscan V2 attempt %d: %s", attempt+1, msg[:50])
-                    time.sleep(1)
-                    continue
-                return data
-            except (URLError, OSError, json.JSONDecodeError) as e:
-                logger.warning("Etherscan V2 attempt %d error: %s", attempt+1, e)
-                if attempt < 2:
-                    time.sleep(1 + attempt)
+                except (httpx.HTTPError, httpx.TimeoutException, json.JSONDecodeError) as e:
+                    logger.warning("Etherscan V2 attempt %d error: %s", attempt+1, e)
+                    if attempt < 2:
+                        continue
         return {"status": "0", "result": [], "message": "Request failed"}
     
-    def get_usdt_transfers_to(self, address: str,
+    async def get_usdt_transfers_to(self, address: str,
                                since_timestamp_ms: int = 0,
                                limit: int = 50) -> list[ChainTransfer]:
         params = {
@@ -88,7 +86,7 @@ class EtherscanV2Client:
         if since_timestamp_ms:
             params["starttimestamp"] = str(since_timestamp_ms // 1000)
         
-        data = self._call(params)
+        data = await self._call(params)
         transfers = []
         for tx in data.get("result", [])[:limit]:
             to_addr = (tx.get("to") or "").lower()
@@ -107,7 +105,7 @@ class EtherscanV2Client:
             ))
         return transfers
     
-    def get_balance(self, address: str) -> Optional[float]:
+    async def get_balance(self, address: str) -> Optional[float]:
         """Get USDT balance via Etherscan tokenbalance endpoint."""
         params = {
             "module": "account",
@@ -115,7 +113,7 @@ class EtherscanV2Client:
             "contractaddress": self.usdt_contract,
             "address": address,
         }
-        data = self._call(params)
+        data = await self._call(params)
         result = data.get("result", "")
         if result and isinstance(result, str) and result.isdigit():
             return int(result) / 1e6  # USDT has 6 decimals on Ethereum too? No - 18 actually
@@ -166,7 +164,7 @@ class BscScanClient:
                     time.sleep(1 + attempt)
         return {"status": "0", "result": [], "message": "Request failed"}
     
-    def get_usdt_transfers_to(self, address: str,
+    async def get_usdt_transfers_to(self, address: str,
                                since_timestamp_ms: int = 0,
                                limit: int = 50) -> list[ChainTransfer]:
         params = {
@@ -180,7 +178,7 @@ class BscScanClient:
         if since_timestamp_ms:
             params["starttimestamp"] = str(since_timestamp_ms // 1000)
         
-        data = self._call(params)
+        data = await self._call(params)
         transfers = []
         for tx in data.get("result", [])[:limit]:
             to_addr = (tx.get("to") or "").lower()
@@ -199,14 +197,14 @@ class BscScanClient:
             ))
         return transfers
     
-    def get_balance(self, address: str) -> Optional[float]:
+    async def get_balance(self, address: str) -> Optional[float]:
         params = {
             "module": "account",
             "action": "tokenbalance",
             "contractaddress": self.usdt_contract,
             "address": address,
         }
-        data = self._call(params)
+        data = await self._call(params)
         result = data.get("result", "")
         if result and isinstance(result, str) and result.lstrip('-').isdigit():
             return int(result) / 1e18
@@ -226,7 +224,7 @@ def create_chain_client(chain: str):
         client.chain = "TRC20"
         client.usdt_contract = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
         
-        def get_usdt_transfers_to(address, since_timestamp_ms=0, limit=50):
+        async def get_usdt_transfers_to(address, since_timestamp_ms=0, limit=50):
             from app.infrastructure.blockchain.trongrid_client import TrongridMonitor
             mon = TrongridMonitor(client)
             raw = mon.fetch_new_transfers(address, since_block=since_timestamp_ms, limit=limit)
