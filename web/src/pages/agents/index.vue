@@ -24,6 +24,56 @@ const toast = ref('')
 // Revealed passwords (masked by default)
 const revealedPw = ref<Record<number, boolean>>({})
 
+// Agent Product Authorization
+const authAgent = ref<any>(null)
+const authProducts = ref<any[]>([])
+const authAssignments = ref<Record<number, {price: number, enabled: boolean}>>({})
+const authLoading = ref(false)
+const authSaving = ref(false)
+
+async function openAuth(agent: any) {
+  authAgent.value = agent
+  authLoading.value = true
+  try {
+    const [avail, current] = await Promise.all([
+      api.get('/api/merchant/products'),
+      api.get('/api/merchant/agents/' + agent.id + '/products'),
+    ])
+    // Available products
+    authProducts.value = (avail.data || []).filter((p:any) => p.authorized)
+    // Current assignments
+    const cur = current.data || []
+    authAssignments.value = {}
+    for (const p of (avail.data || []).filter((p:any) => p.authorized)) {
+      const existing = cur.find((c:any) => c.product_id === p.id)
+      authAssignments.value[p.id] = {
+        price: existing ? existing.agent_price : p.suggested_price,
+        enabled: existing ? existing.status : false,
+      }
+    }
+  } catch (e) { console.error(e) }
+  authLoading.value = false
+}
+
+async function saveAuth() {
+  authSaving.value = true
+  try {
+    for (const [pid, cfg] of Object.entries(authAssignments.value)) {
+      if (cfg.enabled && cfg.price > 0) {
+        await api.post('/api/merchant/agents/' + authAgent.value.id + '/products?product_id=' + pid + '&agent_price=' + cfg.price, {})
+      } else if (!cfg.enabled) {
+        try {
+          await api.delete('/api/merchant/agents/' + authAgent.value.id + '/products/' + pid)
+        } catch {}
+      }
+    }
+    toast.value = '授权配置已保存'
+    authAgent.value = null
+  } catch (e: any) { toast.value = e.message || '保存失败' }
+  authSaving.value = false
+  setTimeout(() => toast.value = '', 3000)
+}
+
 async function load() {
   loading.value = true
   try {
@@ -291,4 +341,32 @@ onMounted(load)
       <p class="text-sm whitespace-nowrap">{{ toast }}</p>
     </div>
   </div>
+  <!-- ════════ Agent Product Auth Modal ════════ -->
+  <div v-if="authAgent" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="authAgent = null">
+    <div class="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
+      <h3 class="text-base font-semibold text-[var(--color-text)] mb-1">货品授权 — {{ authAgent?.nickname }}</h3>
+      <p class="text-xs text-[var(--color-text-muted)] mb-4">设定各货品的代理商售价和授权状态</p>
+      <div v-if="authLoading" class="text-center py-8 text-sm text-[var(--color-text-muted)]">加载中...</div>
+      <div v-else-if="authProducts.length === 0" class="text-center py-8 text-sm text-[var(--color-text-muted)]">没有可授权的货品</div>
+      <div v-for="p in authProducts" :key="p.id" class="flex items-center gap-3 p-3 mb-2 rounded-lg border border-[var(--color-border)]">
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium text-[var(--color-text)]">{{ p.name }}</div>
+          <div class="text-xs text-[var(--color-text-muted)]">面值: {{ p.face_value }} · 建议售价: {{ p.suggested_price }}</div>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-[var(--color-text-muted)]">售价</label>
+          <input type="number" v-model.number="authAssignments[p.id]?.price" min="1" class="w-20 px-2 py-1 text-xs text-center bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-[var(--color-text)]" />
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" v-model="authAssignments[p.id].enabled" class="sr-only peer" />
+          <div class="w-8 h-4 bg-gray-600 rounded-full peer peer-checked:bg-[var(--color-primary)] after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
+        </label>
+      </div>
+      <div class="flex justify-end gap-2 mt-4">
+        <button class="px-4 py-2 text-sm rounded bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)]" @click="authAgent = null">取消</button>
+        <button class="px-4 py-2 text-sm rounded bg-[var(--color-primary)] text-white disabled:opacity-50" :disabled="authSaving" @click="saveAuth">{{ authSaving ? '保存中...' : '保存配置' }}</button>
+      </div>
+    </div>
+  </div>
+
 </template>
