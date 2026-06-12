@@ -1,26 +1,36 @@
 namespace Oracle.Capture;
 
 /// <summary>
-/// Fast SNI-based packet filter using domain suffix matching.
+/// 基于 SNI 的域名过滤器 — 使用后缀匹配快速判断目标域名。
+/// 用户可动态设置目标域名列表，不包含任何业务语义。
 /// </summary>
 public class PacketFilter
 {
-    private readonly string[] _payDomains;
+    private string[] _targetDomains;
 
-    public PacketFilter(string[] payDomains)
+    public PacketFilter(string[] targetDomains)
     {
-        _payDomains = payDomains ?? throw new ArgumentNullException(nameof(payDomains));
+        _targetDomains = targetDomains ?? throw new ArgumentNullException(nameof(targetDomains));
     }
 
     /// <summary>
-    /// Check if the SNI belongs to a payment domain.
-    /// Uses ReadOnlySpan for zero-allocation comparison.
+    /// 动态更新目标域名列表（运行时热切换）。
     /// </summary>
-    public bool IsPayDomain(ReadOnlySpan<char> sni)
+    public void SetTargetDomains(string[] domains)
+    {
+        _targetDomains = domains ?? Array.Empty<string>();
+    }
+
+    /// <summary>
+    /// 判断 SNI 是否匹配目标域名列表。
+    /// 列表为空时返回 false（不处理任何域名）。
+    /// </summary>
+    public bool IsTargetDomain(ReadOnlySpan<char> sni)
     {
         if (sni.IsEmpty) return false;
+        if (_targetDomains.Length == 0) return false;
 
-        foreach (var domain in _payDomains)
+        foreach (var domain in _targetDomains)
         {
             // Exact match
             if (sni.SequenceEqual(domain.AsSpan()))

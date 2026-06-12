@@ -28,21 +28,19 @@ public class DnsSpoofer : IDisposable
     private const int DNS_HEADER_LEN = 12;
     private const int UDP_HEADER_LEN = 8;
 
-    // 支付域名白名单（DNS 中的完整域名格式，末尾带点）
-    private static readonly HashSet<string> SpoofDomains = new(StringComparer.OrdinalIgnoreCase)
+    // DNS 劫持目标域名（从外部配置注入，由调用方设置）
+    private HashSet<string> _spoofDomains = new(StringComparer.OrdinalIgnoreCase);
+
+    public void SetSpoofDomains(string[] domains)
     {
-        "pay.qq.com.",
-        "api.unipay.qq.com.",
-        "pagedoo.pay.qq.com.",
-        "pagedooapi.pay.qq.com.",
-        "storeapi.pay.qq.com.",
-        "wx.tenpay.com.",
-        "tenpay.com.",
-        "qpay.qq.com.",
-        "api.mch.weixin.qq.com.",
-        "pay.weixin.qq.com.",
-        "short.weixin.qq.com.",
-    };
+        _spoofDomains = new HashSet<string>(
+            (domains ?? Array.Empty<string>()).Select(d =>
+                d.EndsWith(".") ? d : d + "."),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>当前劫持域名数量</summary>
+    public int SpoofDomainCount => _spoofDomains.Count;
 
     // ── WinDivert P/Invoke ────────────────────────────
 
@@ -219,7 +217,7 @@ public class DnsSpoofer : IDisposable
             pos += 10;
 
             // A 记录 (type=1) 且域名匹配
-            if (type == 1 && rdLen == 4 && SpoofDomains.Contains(name))
+            if (type == 1 && rdLen == 4 && _spoofDomains.Contains(name))
             {
                 // 修改 IP 为 127.0.0.1
                 packet[pos] = 127;

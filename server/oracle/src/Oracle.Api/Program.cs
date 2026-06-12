@@ -62,7 +62,7 @@ for (int i = 0; i < args.Length; i++)
 
 var credQueue = new CredentialQueue(config);
 var connTracker = new ConnectionTracker(config);
-var packetFilter = new PacketFilter(config.PayDomains);
+var packetFilter = new PacketFilter(config.TargetDomains);
 var certMgr = new CertificateManager(config);
 var httpParser = new HttpParser();
 var extractor = new CredentialExtractor(httpParser);
@@ -82,9 +82,11 @@ Console.WriteLine($"[Oracle] Protocol parsers: {protocolRegistry.Count} ({string
 var channelMgr = new ChannelManager();
 
 var winDivertCh = new WinDivertChannel(config, connTracker, packetFilter);
+winDivertCh.SetSniKeywords(config.SniKeywords);
 channelMgr.Register(winDivertCh);
 
 var dnsSpoofCh = new DnsSpoofChannel();
+dnsSpoofCh.SetSpoofDomains(config.SpoofDomains);
 channelMgr.Register(dnsSpoofCh);
 
 var tlsProxyCh = new TlsProxyChannel(config, certMgr, credQueue, ruleEngine, protocolRegistry, trafficBuffer);
@@ -119,10 +121,39 @@ builder.Services.AddCors(options =>
         policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
 });
 
+// OpenAPI / Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v2", new()
+    {
+        Title = "神谕 Oracle API",
+        Description = "万能数据采集引擎 · Universal Data Collector\n\n" +
+            "纯接口驱动，支持 WinDivert 内核级捕获、DNS 劫持、TLS 中间人解密、正则/JSONPath 数据提取。\n\n" +
+            "所有通道通过 ICaptureChannel 插件化注册，规则通过 platforms/*.json 热加载。",
+        Version = "2.0.0",
+        Contact = new() { Name = "Oracle Project" },
+    });
+
+    // Include XML comments
+    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    if (File.Exists(xmlPath))
+        options.IncludeXmlComments(xmlPath);
+});
+
 var app = builder.Build();
 app.UseCors();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+// Enable Swagger UI
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v2/swagger.json", "神谕 Oracle API v2");
+    options.RoutePrefix = "api/docs";
+});
 
 // Health / Status
 app.MapGet("/status", () =>
@@ -402,7 +433,7 @@ app.MapGet("/help", () =>
     {
         name = "神谕 (Oracle)",
         version = "1.0.0",
-        description = "万能支付凭证采集引擎 — Universal Payment Credential Collector",
+        description = "万能数据采集引擎 — Universal Data Collector",
         commands = new
         {
             @start = "POST /start — 启动捕获引擎 + TLS 代理",
@@ -423,23 +454,24 @@ app.MapGet("/help", () =>
 // ── Startup ──────────────────────────────────────────
 
 Console.WriteLine($@"
-╔══════════════════════════════════════════════╗
-║        神谕 (Oracle) v1.0                    ║
-║    万能支付凭证采集引擎                       ║
-╠══════════════════════════════════════════════╣
-║  HTTPS Proxy : 127.0.0.1:{config.TlsProxyPort}         ║
-║  API Server  : http://{config.ApiBindAddress}:{config.ApiPort}   ║
-║  Backend     : {config.BackendUrl,-36}║
-║  Rules       : {ruleEngine.RuleCount,-2} platform rules loaded    ║
-║  Domains     : {config.PayDomains.Length,-2} payment domains       ║
-╠══════════════════════════════════════════════╣
-║  Quick start:                                  ║
-║  1. Set Chrome proxy to 127.0.0.1:{config.TlsProxyPort}      ║
-║  2. POST /start to begin capturing             ║
-║  3. Visit https://pay.qq.com and pay           ║
-║  4. GET /status to see captured credentials    ║
-║  5. GET /help for all commands                 ║
-╚══════════════════════════════════════════════╝");
+╔════════════════════════════════════════════════════════╗
+║              神谕 (Oracle) v2.0                        ║
+║          Universal Data Collector                      ║
+╠════════════════════════════════════════════════════════╣
+║  HTTPS Proxy  : 127.0.0.1:{config.TlsProxyPort}                     ║
+║  API Server   : http://{config.ApiBindAddress}:{config.ApiPort}       ║
+║  Backend      : {config.BackendUrl ?? "(none)",-40}║
+║  Rules        : {ruleEngine.RuleCount,-2} loaded                        ║
+║  Targets      : {config.TargetDomains.Length,-2} domains                 ║
+║  DNS Spoof    : {config.SpoofDomains.Length,-2} domains                  ║
+╠════════════════════════════════════════════════════════╣
+║  Quick start:                                           ║
+║  1. POST /start            begin capturing              ║
+║  2. POST /config           set target domains           ║
+║  3. GET  /status           view statistics              ║
+║  4. GET  /data             view extracted data          ║
+║  5. GET  /help             all commands                 ║
+╚════════════════════════════════════════════════════════╝");
 
 // Export root CA certificate for browser trust
 app.MapGet("/cert", () =>

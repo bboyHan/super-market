@@ -83,4 +83,12 @@ public class WinDivertChannel : ICaptureChannel
     }
 
     public long PacketsCaptured => _driver.DirectPacketCount;
+
+    /// <summary>
+    /// 设置 SNI 关键词列表。命中任意关键词的 TLS SNI 会被转发到 TlsProxy。
+    /// </summary>
+    public void SetSniKeywords(string[] keywords)
+    {
+        _driver.SetSniKeywords(keywords);
+    }
 }

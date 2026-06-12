@@ -9,9 +9,10 @@ namespace Oracle.Capture;
 public class DnsSpoofChannel : ICaptureChannel
 {
     private DnsSpoofer? _spoofer;
+    private string[] _spoofDomains = Array.Empty<string>();
 
     public string Name => "DnsSpoof";
-    public string Description => "DNS 劫持 — 支付域名指向本地代理";
+    public string Description => "DNS 劫持 — 目标域名指向本地代理";
     public ChannelCapability Capability => new()
     {
         RequiresAdmin = true,
@@ -25,11 +26,17 @@ public class DnsSpoofChannel : ICaptureChannel
 
     public long SpoofedCount => _spoofer?.SpoofedCount ?? 0;
 
+    public void SetSpoofDomains(string[] domains)
+    {
+        _spoofDomains = domains ?? Array.Empty<string>();
+    }
+
     public Task<bool> InitializeAsync()
     {
         try
         {
             _spoofer = new DnsSpoofer();
+            _spoofer.SetSpoofDomains(_spoofDomains);
             Console.Error.WriteLine("[DnsSpoofChannel] Created");
             return Task.FromResult(true);
         }

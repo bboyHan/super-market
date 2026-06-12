@@ -159,25 +159,25 @@ public class TlsProxy : IAsyncDisposable
                 return;
             }
 
-            // ⭐ 判断是否为支付域名 — 使用配置中的 PayDomains 白名单
-            var isPaymentDomain = false;
+            // ⭐ 判断是否为目标域名 — 使用配置中的 TargetDomains 白名单
+            var isTargetDomain = false;
             if (!string.IsNullOrEmpty(sni))
             {
-                foreach (var domain in _config.PayDomains)
+                foreach (var domain in _config.TargetDomains)
                 {
-                    // 精确匹配: sni == "api.unipay.qq.com"
+                    // 精确匹配
                     if (sni.Equals(domain, StringComparison.OrdinalIgnoreCase))
-                    { isPaymentDomain = true; break; }
-                    // 子域名匹配: "pay.api.unipay.qq.com" → 匹配 "api.unipay.qq.com"
+                    { isTargetDomain = true; break; }
+                    // 子域名匹配
                     if (sni.Length > domain.Length &&
                         sni[sni.Length - domain.Length - 1] == '.' &&
                         sni.AsSpan(sni.Length - domain.Length).Equals(domain.AsSpan(), StringComparison.OrdinalIgnoreCase))
-                    { isPaymentDomain = true; break; }
+                    { isTargetDomain = true; break; }
                 }
             }
 
-            
-            if (!isPaymentDomain)
+
+            if (!isTargetDomain)
             {
                 Console.WriteLine($"[TlsProxy] ⟳ Transparent: {sni}");
                 await TransparentForward(clientSocket, clientStream, firstBytes, bytesRead, sni, ct);

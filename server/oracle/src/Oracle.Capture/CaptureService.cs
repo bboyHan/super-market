@@ -61,7 +61,7 @@ public class CaptureService : IDisposable
         var sni = packet.ExtractSni();
         if (sni == null) return;
 
-        if (!_filter.IsPayDomain(sni)) return;
+        if (!_filter.IsTargetDomain(sni)) return;
 
         Interlocked.Increment(ref _packetsFiltered);
 

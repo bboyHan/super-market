@@ -22,22 +22,19 @@ public class WinDivertDriver : ICaptureDriver
     public long DirectPacketCount => Interlocked.Read(ref _directPacketCount);
     public event Action<CapturedPacket>? OnPacketCaptured;
 
-    // Paydomain SNI keywords
-    private static readonly (string keyword, string label)[] PayDomains = {
-        ("pay.qq.com", "pay.qq"), ("unipay.qq.com", "unipay"), ("storeapi", "store"),
-        ("pagedoo", "pagedoo"), ("tenpay.com", "tenpay"), ("weixin.qq.com", "weixin"),
-        ("midas.gtimg.cn", "midas"), ("vm.gtimg.cn", "vm"),
-        ("jspay.qq.com", "jspay"), ("myun.tenpay.com", "myun"),
-        ("qpay.qq.com", "qpay"),
-        ("mp.weixin.qq.com", "mp.wx"),
-        ("aegis.qq.com", "aegis"), ("graph.qq.com", "graph"),
-        ("jifen.qq.com", "jifen"), ("szmg.qq.com", "szmg"), ("log.tbs.qq.com", "logtbs"),
-    };
+    // SNI keywords from config (set externally, e.g. by the Supermarket tooling)
+    private string[] _sniKeywords = Array.Empty<string>();
 
-    private static bool IsPaySni(string sni)
+    public void SetSniKeywords(string[] keywords)
+    {
+        _sniKeywords = keywords ?? Array.Empty<string>();
+    }
+
+    private bool IsTargetSni(string sni)
     {
         if (sni == null) return false;
-        foreach (var (kw, _) in PayDomains)
+        if (_sniKeywords.Length == 0) return true; // No filter = pass all
+        foreach (var kw in _sniKeywords)
             if (sni.Contains(kw, StringComparison.OrdinalIgnoreCase)) return true;
         return false;
     }
