@@ -310,6 +310,7 @@ public class TlsProxy : IAsyncDisposable
                         var responseStr = System.Text.Encoding.UTF8.GetString(buffer, 0, n);
 
                         var rawResp = System.Text.Encoding.UTF8.GetString(responseBuffer.ToArray());
+                        rawResp = Oracle.Shared.GzipHelper.DecompressBody(rawResp);
 
                         // Record ALL decrypted traffic (Fiddler-style) regardless of rules
                         if (requestCapture.Captured)
