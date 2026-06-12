@@ -1643,25 +1643,28 @@ async def get_abnormal_orders(
     _=Depends(_require_admin),
 ):
     """异常订单列表 — 超时未确认、交付失败、状态不一致。"""
-    where = "1=1"
+    where_clauses = []
+    bind_filter = {}
+    bind_page = {"lim": limit, "off": (page-1)*limit}
     if status:
-        where += f" AND o.status = '{status}'"
+        where_clauses.append("o.status = :st")
+        bind_filter["st"] = status
 
-    total = await session.execute(text(f"SELECT count(*) FROM orders o WHERE {where}"))
-    rows = await session.execute(text(f"""
-        SELECT o.order_no, o.status, o.confirm_mode, o.amount,
-               o.created_at, o.updated_at, s.name AS supplier_name,
-               ap.name AS payer_name, a.name AS agent_name,
-               CASE WHEN o.status IN ('PENDING','DELIVERING')
-                     AND o.created_at < NOW() - INTERVAL '2 hours' THEN true ELSE false END AS is_timeout
-        FROM orders o
-        JOIN suppliers s ON o.supplier_id=s.id
-        JOIN api_payers ap ON o.api_payer_id=ap.id
-        LEFT JOIN agents a ON o.agent_id=a.id
-        WHERE {where}
-        ORDER BY o.created_at DESC
-        LIMIT :lim OFFSET :off
-    """).bindparams(lim=limit, off=(page-1)*limit))
+    w = " AND ".join(where_clauses) if where_clauses else "TRUE"
+    total = await session.execute(
+        text(f"SELECT count(*) FROM orders o WHERE {w}").bindparams(**bind_filter))
+    rows = await session.execute(
+        text(f"SELECT o.order_no, o.status, o.confirm_mode, o.amount, "
+             f"o.created_at, o.updated_at, s.name AS supplier_name, "
+             f"ap.name AS payer_name, a.name AS agent_name, "
+             f"CASE WHEN o.status IN ('PENDING','DELIVERING') "
+             f"AND o.created_at < NOW() - INTERVAL '2 hours' THEN true ELSE false END AS is_timeout "
+             f"FROM orders o "
+             f"JOIN suppliers s ON o.supplier_id=s.id "
+             f"JOIN api_payers ap ON o.api_payer_id=ap.id "
+             f"LEFT JOIN agents a ON o.agent_id=a.id "
+             f"WHERE {w} ORDER BY o.created_at DESC LIMIT :lim OFFSET :off")
+        .bindparams(**{**bind_filter, **bind_page}))
 
     return {"code": 0, "data": {
         "items": [{
@@ -1723,25 +1726,28 @@ async def get_audit_logs(
     _=Depends(_require_admin),
 ):
     """操作审计日志 — 查询用户登录和关键操作记录。"""
-    where = ["1=1"]
-    params = {"lim": limit, "off": (page-1)*limit}
+    where_clauses = []
+    bind_filter = {}
+    bind_page = {"lim": limit, "off": (page-1)*limit}
 
     if user_id:
-        where.append(f"user_id = :uid")
-        params["uid"] = user_id
+        where_clauses.append("user_id = :uid")
+        bind_filter["uid"] = user_id
     if action == "error":
-        where.append("NOT success")
+        where_clauses.append("NOT success")
     elif action == "login":
-        where.append("success")
+        where_clauses.append("success")
     elif action == "force_complete":
-        where.append("fail_reason LIKE '强制完成%'")
+        where_clauses.append("fail_reason LIKE :fc_pattern")
+        bind_filter["fc_pattern"] = "强制完成%"
 
-    w = " AND ".join(where)
-    total = await session.execute(text(f"SELECT count(*) FROM login_logs WHERE {w}").bindparams(**params))
-    rows = await session.execute(text(f"""
-        SELECT id, user_id, username, ip_address, user_agent, success, fail_reason, created_at
-        FROM login_logs WHERE {w} ORDER BY created_at DESC LIMIT :lim OFFSET :off
-    """).bindparams(**params))
+    w = " AND ".join(where_clauses) if where_clauses else "TRUE"
+    total = await session.execute(
+        text(f"SELECT count(*) FROM login_logs WHERE {w}").bindparams(**bind_filter))
+    rows = await session.execute(
+        text(f"SELECT id, user_id, username, ip_address, user_agent, success, fail_reason, created_at "
+             f"FROM login_logs WHERE {w} ORDER BY created_at DESC LIMIT :lim OFFSET :off")
+        .bindparams(**{**bind_filter, **bind_page}))
 
     return {"code": 0, "data": {
         "items": [{

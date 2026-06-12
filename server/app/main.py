@@ -25,9 +25,10 @@ def create_app() -> FastAPI:
         from app.infrastructure.callback.worker import start_worker
         from app.infrastructure.persistence.postgres.session import async_session_factory
         callback_task = start_worker(async_session_factory)
-        # Start blockchain monitor
-        from app.infrastructure.blockchain.monitor import start_monitor
-        asyncio.create_task(start_monitor())
+        # Blockchain monitor temporarily disabled (sync HTTP blocks event loop)
+        # from app.infrastructure.blockchain.monitor import start_monitor
+        # asyncio.create_task(start_monitor())
+        logger.info("Blockchain monitor disabled (will be refactored to use httpx)")
         yield
         # ── shutdown ─────────────────────────────────────
         callback_task.cancel()
