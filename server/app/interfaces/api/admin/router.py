@@ -4,6 +4,7 @@ import secrets
 import json
 import asyncio
 from typing import Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -1581,6 +1582,106 @@ async def reset_api_payer_secret(
         raise HTTPException(status_code=404, detail="API支付商不存在")
     await session.commit()
     return {"code": 0, "message": "密钥已重置", "api_secret": new_secret}
+
+
+# ═══════════════════════════════════════════════════════════════
+# SYSTEM CONFIG (系统配置)
+# ═══════════════════════════════════════════════════════════════
+
+
+# ── Announcements ──
+
+
+class AnnouncementCreate(BaseModel):
+    title: str = Field(..., max_length=256)
+    content: str = ""
+    target_role: str = "ALL"
+
+
+@router.get("/announcements")
+async def list_announcements(
+    status: str = "",
+    session: AsyncSession = Depends(get_db_session),
+    _=Depends(_require_admin),
+):
+    """获取系统公告列表。"""
+    where = "TRUE"
+    if status:
+        where = f"status='{status}'"
+    rows = await session.execute(text(f"""
+        SELECT id, title, content, target_role, status, created_by, created_at
+        FROM announcements WHERE {where} ORDER BY created_at DESC
+    """))
+    return {"code": 0, "data": [{
+        "id": r[0], "title": r[1], "content": r[2],
+        "target_role": r[3], "status": r[4],
+        "created_by": r[5], "created_at": str(r[6]) if r[6] else None,
+    } for r in rows]}
+
+
+@router.post("/announcements")
+async def create_announcement(
+    req: AnnouncementCreate,
+    session: AsyncSession = Depends(get_db_session),
+    user: dict = Depends(_require_admin),
+):
+    """创建系统公告。"""
+    uid = int(user.get("sub", 0))
+    row = await session.execute(
+        text("INSERT INTO announcements (title, content, target_role, created_by) "
+             "VALUES (:t, :c, :tr, :uid) RETURNING id")
+        .bindparams(t=req.title, c=req.content, tr=req.target_role, uid=uid))
+    aid = row.scalar()
+    await session.commit()
+    return {"code": 0, "data": {"id": aid}, "message": "公告已发布"}
+
+
+@router.delete("/announcements/{aid}")
+async def delete_announcement(
+    aid: int,
+    session: AsyncSession = Depends(get_db_session),
+    _=Depends(_require_admin),
+):
+    """删除系统公告。"""
+    await session.execute(
+        text("DELETE FROM announcements WHERE id=:id").bindparams(id=aid))
+    await session.commit()
+    return {"code": 0, "message": "已删除"}
+
+
+# ── Fee Config ──
+
+
+@router.get("/fee-config")
+async def list_fee_config(
+    session: AsyncSession = Depends(get_db_session),
+    _=Depends(_require_admin),
+):
+    """获取平台手续费率配置。"""
+    rows = await session.execute(text(
+        "SELECT id, fee_name, fee_rate, fee_type, description, enabled, updated_at "
+        "FROM fee_config ORDER BY id"))
+    return {"code": 0, "data": [{
+        "id": r[0], "fee_name": r[1], "fee_rate": float(r[2]),
+        "fee_type": r[3], "description": r[4], "enabled": r[5],
+        "updated_at": str(r[6]) if r[6] else None,
+    } for r in rows]}
+
+
+@router.put("/fee-config/{fid}")
+async def update_fee_config(
+    fid: int, fee_rate: float, enabled: bool = True,
+    session: AsyncSession = Depends(get_db_session),
+    _=Depends(_require_admin),
+):
+    """更新手续费率。"""
+    if fee_rate < 0 or fee_rate > 1:
+        raise HTTPException(status_code=400, detail="费率必须在 0~1 之间")
+    await session.execute(
+        text("UPDATE fee_config SET fee_rate=:r, enabled=:en, updated_at=NOW() WHERE id=:id")
+        .bindparams(r=fee_rate, en=enabled, id=fid))
+    await session.commit()
+    return {"code": 0, "message": "费率已更新"}
 
 
 # ═══════════════════════════════════════════════════════════════
