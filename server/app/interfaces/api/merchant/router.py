@@ -11,6 +11,8 @@ from app.infrastructure.persistence.postgres.session import get_db_session
 from app.interfaces.api.auth.router import get_current_user
 from app.domain.routing.strategy import RoutingStrategy
 from app.domain.routing.engine import _STRATEGY_MAP
+from app.infrastructure.cache.daily_counter import DailyCounter
+from app.container import get_redis
 
 router = APIRouter(prefix="/api/merchant", tags=["merchant"])
 
@@ -72,10 +74,25 @@ async def get_dashboard(
         FROM orders o WHERE o.supplier_id = :sid
     """).bindparams(sid=sid))
     r = rows.first()
+    
+    # Try Redis counters for real-time today stats
+    redis_orders = 0
+    redis_amount = 0
+    try:
+        redis = await get_redis()
+        counter = DailyCounter(redis)
+        rt = await counter.get_today(sid)
+        redis_orders = rt.get('today_orders', 0)
+        redis_amount = rt.get('today_amount', 0)
+    except:
+        pass
+    
     return {"code": 0, "data": {
         "today_amount": r[0] or 0, "yesterday_amount": r[1] or 0,
         "agent_count": r[2] or 0, "apayer_count": r[3] or 0,
         "wallet_balance": r[4] or 0,
+        "redis_orders": redis_orders,
+        "redis_amount": redis_amount,
     }}
 
 
@@ -473,6 +490,93 @@ async def reset_agent_password(
     username = row.scalar() or "-"
     return {"code": 0, "data": {"agent_id": aid, "username": username, "new_password": new_pw},
             "message": "密码已重置"}
+
+
+# ── Agent Product Authorization ──────────────────────────
+
+
+@router.get("/agents/{agent_id}/products")
+async def list_agent_products(
+    agent_id: int,
+    sid: int = Depends(_get_supplier_id),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """获取代理商已授权的货品列表及售价。"""
+    # Verify agent belongs to supplier
+    ag = await session.execute(
+        text("SELECT id FROM agents WHERE id=:aid AND supplier_id=:sid").bindparams(aid=agent_id, sid=sid))
+    if not ag.first():
+        raise HTTPException(status_code=404, detail="代理商不存在或不属于你")
+
+    rows = await session.execute(
+        text("""
+            SELECT apa.product_id, p.name, p.category, p.face_value, p.suggested_price,
+                   apa.agent_price, apa.status, apa.created_at
+            FROM agent_product_auth apa
+            JOIN products p ON apa.product_id = p.id
+            WHERE apa.agent_id = :aid AND apa.supplier_id = :sid
+            ORDER BY p.category, p.name
+        """).bindparams(aid=agent_id, sid=sid))
+    return {"code": 0, "data": [{
+        "product_id": r[0], "product_name": r[1], "category": r[2],
+        "face_value": r[3], "suggested_price": r[4],
+        "agent_price": r[5], "status": bool(r[6]),
+        "authorized_at": str(r[7]) if r[7] else None,
+    } for r in rows]}
+
+
+@router.post("/agents/{agent_id}/products")
+async def authorize_product(
+    agent_id: int,
+    product_id: int,
+    agent_price: int,
+    sid: int = Depends(_get_supplier_id),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """授权货品给代理商并设定售价。"""
+    # Verify agent belongs to supplier
+    ag = await session.execute(
+        text("SELECT id FROM agents WHERE id=:aid AND supplier_id=:sid").bindparams(aid=agent_id, sid=sid))
+    if not ag.first():
+        raise HTTPException(status_code=404, detail="代理商不存在或不属于你")
+
+    # Verify product is authorized for this supplier
+    auth = await session.execute(
+        text("SELECT id FROM supplier_product_auth WHERE supplier_id=:sid AND product_id=:pid AND status=TRUE")
+        .bindparams(sid=sid, pid=product_id))
+    if not auth.first():
+        raise HTTPException(status_code=400, detail="货品未授权给当前供应商")
+
+    if agent_price < 1:
+        raise HTTPException(status_code=400, detail="售价必须大于0")
+
+    await session.execute(
+        text("""
+            INSERT INTO agent_product_auth (agent_id, product_id, supplier_id, agent_price)
+            VALUES (:aid, :pid, :sid, :ap)
+            ON CONFLICT (agent_id, product_id) DO UPDATE
+            SET agent_price=EXCLUDED.agent_price, status=TRUE, created_at=NOW()
+        """).bindparams(aid=agent_id, pid=product_id, sid=sid, ap=agent_price))
+    await session.commit()
+
+    return {"code": 0, "message": f"已授权，售价 {agent_price} 积分"}
+
+
+@router.delete("/agents/{agent_id}/products/{product_id}")
+async def revoke_agent_product(
+    agent_id: int,
+    product_id: int,
+    sid: int = Depends(_get_supplier_id),
+    session: AsyncSession = Depends(get_db_session),
+):
+    """取消代理商货品授权（软删除）。"""
+    r = await session.execute(
+        text("UPDATE agent_product_auth SET status=FALSE WHERE agent_id=:aid AND product_id=:pid AND supplier_id=:sid")
+        .bindparams(aid=agent_id, pid=product_id, sid=sid))
+    await session.commit()
+    if r.rowcount == 0:
+        raise HTTPException(status_code=404, detail="授权记录不存在")
+    return {"code": 0, "message": "已取消授权"}
 
 
 # ── API Payers (supplier manages their own) ──────────────────

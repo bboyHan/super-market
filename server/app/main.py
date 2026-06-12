@@ -28,6 +28,9 @@ def create_app() -> FastAPI:
         # Start blockchain monitor (now using httpx async)
         from app.infrastructure.blockchain.monitor import start_monitor
         asyncio.create_task(start_monitor())
+        # Start order worker (auto-cancel expired + Redis counters)
+        from app.worker.order_worker import start_order_worker
+        asyncio.create_task(start_order_worker())
         yield
         # ── shutdown ─────────────────────────────────────
         callback_task.cancel()

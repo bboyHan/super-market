@@ -16,6 +16,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.routing.engine import RoutingEngine
+from app.infrastructure.cache.daily_counter import DailyCounter
+from app.container import get_redis
 from app.infrastructure.persistence.postgres.session import get_db_session
 
 router = APIRouter(prefix="/api/open", tags=["open"])
@@ -314,6 +316,14 @@ async def create_order(
                     .bindparams(on=order_no))
 
     await session.commit()
+
+    # ┌─ Redis 实时计数 ──
+    try:
+        redis = await get_redis()
+        counter = DailyCounter(redis)
+        await counter.incr_order(sid, total_amt)
+    except:
+        pass
 
     # ── 异步回调通知 API 支付商 ──
     if deliveries_made > 0 and cb_url:
