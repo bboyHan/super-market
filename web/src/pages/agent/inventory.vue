@@ -11,7 +11,41 @@ const summary = ref<any[]>([])
 const products = ref<any[]>([])
 const loading = ref(true)
 
-const activeTab = ref<'list' | 'summary'>('list')
+const activeTab = ref<'list' | 'summary' | 'alerts'>('list')
+const alertsConfig = ref<any[]>([])
+const alertThresholds = ref<Record<number, number>>({})
+const alertEnabled = ref<Record<number, boolean>>({})
+const savingAlert = ref(false)
+
+async function loadAlerts() {
+  try {
+    const r = await api.get('/api/terminal/inventory/alerts')
+    alertsConfig.value = r?.data || []
+    for (const a of (r?.data || [])) {
+      alertThresholds.value[a.product_id] = a.threshold
+      alertEnabled.value[a.product_id] = a.enabled
+    }
+    // Fill in products that don't have alerts
+    for (const p of (products.value || [])) {
+      if (!(p.id in alertThresholds.value)) {
+        alertThresholds.value[p.id] = 10
+        alertEnabled.value[p.id] = true
+      }
+    }
+  } catch (e) { console.error('Failed to load alerts:', e) }
+}
+
+async function saveAlert(productId: number) {
+  savingAlert.value = true
+  try {
+    await api.put('/api/terminal/inventory/alerts/' + productId, {
+      product_id: productId,
+      threshold: alertThresholds.value[productId] || 10,
+      enabled: alertEnabled.value[productId] ?? true,
+    })
+  } catch (e) { console.error('Save alert failed:', e) }
+  savingAlert.value = false
+}
 
 async function loadData() {
   loading.value = true
@@ -51,7 +85,7 @@ function copyContent(text: string) {
   })
 }
 
-onMounted(loadData)
+onMounted(() => { loadData(); loadAlerts(); })
 
 function statusBadge(status: string): string {
   const map: Record<string, string> = {
@@ -146,4 +180,31 @@ function formatTime(t: string | null): string {
       </div>
     </div>
   </div>
+  <!-- ════════════ Alerts Tab ════════════ -->
+  <div v-else-if="activeTab === 'alerts'" class="space-y-3">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="text-sm font-semibold text-[var(--color-text)]">库存预警设置</h3>
+      <span class="text-xs text-[var(--color-text-muted)]">低于阈值时提醒补货</span>
+    </div>
+    <div v-for="p in (products || [])" :key="p.id" class="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-bg)] border border-[var(--color-border)]">
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-medium text-[var(--color-text)] truncate">{{ p.name }}</div>
+        <div class="text-xs text-[var(--color-text-muted)]">建议售价: {{ p.settlement_price || p.suggested_price }} 积分</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-xs text-[var(--color-text-muted)]">低于</label>
+        <input type="number" v-model.number="alertThresholds[p.id]" min="1" max="9999"
+          class="w-16 px-2 py-1 text-xs text-center bg-[var(--color-bg-elevated)] border border-[var(--color-border)] rounded text-[var(--color-text)]"
+          @change="saveAlert(p.id)"
+        />
+        <label class="text-xs text-[var(--color-text-muted)]">条时提醒</label>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" v-model="alertEnabled[p.id]" class="sr-only peer" @change="saveAlert(p.id)" />
+        <div class="w-8 h-4 bg-[var(--color-bg-elevated)] rounded-full peer peer-checked:bg-[var(--color-primary)] after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
+      </label>
+    </div>
+    <div v-if="!(products || []).length" class="text-sm text-[var(--color-text-muted)] text-center py-8">暂无授权货品</div>
+  </div>
+
 </template>

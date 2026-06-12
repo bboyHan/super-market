@@ -327,6 +327,13 @@ function formatAmount(v: number): string {
           <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': refreshing }" />
           {{ refreshing ? '刷新中...' : '刷新当日统计' }}
         </button>
+        <a
+          :href="`/api/merchant/daily-stats/merchant/export?date=${selectedDate}`"
+          class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded transition-colors bg-[var(--color-bg-elevated)] text-[var(--color-text)] hover:bg-[var(--color-border)] border border-[var(--color-border)]"
+          target="_blank"
+        >
+          📥 导出 CSV
+        </a>
       </div>
 
       <!-- Sub-tabs -->
